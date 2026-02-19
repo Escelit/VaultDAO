@@ -5,18 +5,111 @@ import {
     Operation,
     TransactionBuilder,
     SorobanRpc,
-    nativeToScVal
+    nativeToScVal,
+    scValToNative
 } from 'stellar-sdk';
 import { signTransaction } from '@stellar/freighter-api';
 import { useWallet } from '../context/WalletContext';
 import { parseError } from '../utils/errorParser';
+import type { VaultActivity, VaultEventsFilters, GetVaultEventsResult, VaultEventType } from '../types/activity';
 
 // Replace with your actual Contract ID
 const CONTRACT_ID = "CDXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
 const NETWORK_PASSPHRASE = "Test SDF Network ; September 2015";
 const RPC_URL = "https://soroban-testnet.stellar.org";
+const EVENTS_PAGE_SIZE = 20;
 
 const server = new SorobanRpc.Server(RPC_URL);
+
+/** Known contract event names (topic[0] symbol) */
+const EVENT_SYMBOLS: VaultEventType[] = [
+    'proposal_created', 'proposal_approved', 'proposal_ready', 'proposal_executed',
+    'proposal_rejected', 'signer_added', 'signer_removed', 'config_updated', 'initialized', 'role_assigned'
+];
+
+function getEventTypeFromTopic(topic0Base64: string): VaultEventType {
+    try {
+        const scv = xdr.ScVal.fromXDR(topic0Base64, 'base64');
+        const native = scValToNative(scv);
+        if (typeof native === 'string' && EVENT_SYMBOLS.includes(native as VaultEventType)) {
+            return native as VaultEventType;
+        }
+        return 'unknown';
+    } catch {
+        return 'unknown';
+    }
+}
+
+function addressFromScVal(scv: xdr.ScVal): string {
+    try {
+        const native = scValToNative(scv);
+        if (typeof native === 'object' && native && 'address' in native) {
+            const addr = (native as { address: () => string }).address?.() ?? String(native);
+            return addr;
+        }
+        if (typeof native === 'string') return native;
+        return '';
+    } catch {
+        return '';
+    }
+}
+
+function parseEventValue(valueXdrBase64: string, eventType: VaultEventType): { actor: string; details: Record<string, unknown> } {
+    const details: Record<string, unknown> = {};
+    let actor = '';
+    try {
+        const scv = xdr.ScVal.fromXDR(valueXdrBase64, 'base64');
+        const native = scValToNative(scv);
+        if (Array.isArray(native)) {
+            const vec = native as unknown[];
+            if (eventType === 'proposal_created' && vec.length >= 3) {
+                actor = addressFromScVal(xdr.ScVal.fromXDR(Buffer.from(JSON.stringify(vec[0])).toString('base64'), 'base64'));
+                details.proposer = actor;
+                details.recipient = vec[1] != null ? String(vec[1]) : '';
+                details.amount = vec[2] != null ? String(vec[2]) : '';
+            } else if (eventType === 'proposal_approved' && vec.length >= 3) {
+                actor = vec[0] != null ? String(vec[0]) : '';
+                details.approval_count = vec[1];
+                details.threshold = vec[2];
+            } else if (eventType === 'proposal_executed' && vec.length >= 3) {
+                actor = vec[0] != null ? String(vec[0]) : '';
+                details.recipient = vec[1];
+                details.amount = vec[2];
+            } else if (eventType === 'proposal_rejected' && vec.length >= 1) {
+                actor = vec[0] != null ? String(vec[0]) : '';
+            } else if ((eventType === 'signer_added' || eventType === 'signer_removed') && vec.length >= 2) {
+                actor = vec[0] != null ? String(vec[0]) : '';
+                details.total_signers = vec[1];
+            } else if (eventType === 'config_updated' || eventType === 'initialized') {
+                actor = vec[0] != null ? String(vec[0]) : '';
+            } else if (eventType === 'role_assigned' && vec.length >= 2) {
+                actor = vec[0] != null ? String(vec[0]) : '';
+                details.role = vec[1];
+            } else {
+                actor = vec[0] != null ? String(vec[0]) : '';
+                details.raw = native;
+            }
+        } else if (native !== null && typeof native === 'object') {
+            details.raw = native;
+        }
+    } catch {
+        details.parseError = true;
+    }
+    return { actor, details };
+}
+
+/** Raw event from getEvents RPC */
+interface RawEvent {
+    type: string;
+    ledger: string;
+    ledgerClosedAt?: string;
+    contractId?: string;
+    id: string;
+    pagingToken?: string;
+    inSuccessfulContractCall?: boolean;
+    topic?: string[];
+    value?: { xdr: string };
+}
 
 export const useVaultContract = () => {
     const { address, isConnected } = useWallet();
