@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { LayoutDashboard, FileText, Settings, Wallet, Menu, X, Activity as ActivityIcon, BarChart3 } from 'lucide-react';
 import { useWallet } from '../../context/WalletContext';
+import CopyButton from '../CopyButton';
 
 const DashboardLayout: React.FC = () => {
     const { isConnected, address, connect, disconnect } = useWallet();
@@ -80,9 +81,10 @@ const DashboardLayout: React.FC = () => {
 
                     <div className="flex items-center space-x-4">
                         {isConnected && address ? (
-                            <div className="flex items-center space-x-3 bg-gray-700 px-4 py-2 rounded-full">
+                            <div className="flex items-center space-x-2 bg-gray-700 px-3 py-1.5 rounded-full">
                                 <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
                                 <span className="text-sm font-medium">{shortenAddress(address)}</span>
+                                <CopyButton text={address} className="!bg-transparent !p-0.5 hover:text-white" iconSize={12} />
                                 <button
                                     onClick={disconnect}
                                     className="text-xs text-gray-400 hover:text-white"

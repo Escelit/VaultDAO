@@ -3,6 +3,8 @@ import { useWallet } from '../../context/WalletContext';
 import { useToast } from '../../context/ToastContext';
 import { useVaultContract } from '../../hooks/useVaultContract';
 import ConfirmationModal from '../../components/ConfirmationModal';
+import StatusBadge, { type ProposalStatus } from '../../components/StatusBadge';
+import CopyButton from '../../components/CopyButton';
 
 interface Proposal {
     id: number;
@@ -11,7 +13,7 @@ interface Proposal {
     amount: string;
     token: string;
     memo: string;
-    status: 'Pending' | 'Approved' | 'Executed' | 'Rejected' | 'Expired';
+    status: ProposalStatus;
     approvals: number;
     threshold: number;
     createdAt: string;
@@ -100,16 +102,6 @@ const Proposals: React.FC = () => {
         setSelectedProposal(null);
     };
 
-    const getStatusColor = (status: Proposal['status']) => {
-        switch (status) {
-            case 'Pending': return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20';
-            case 'Approved': return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
-            case 'Executed': return 'bg-green-500/10 text-green-400 border-green-500/20';
-            case 'Rejected': return 'bg-red-500/10 text-red-400 border-red-500/20';
-            case 'Expired': return 'bg-gray-500/10 text-gray-400 border-gray-500/20';
-            default: return 'bg-gray-500/10 text-gray-400 border-gray-500/20';
-        }
-    };
 
     return (
         <div className="space-y-6">
@@ -134,9 +126,7 @@ const Proposals: React.FC = () => {
                                         <h3 className="text-lg font-semibold text-white">Proposal #{proposal.id}</h3>
                                         <p className="text-sm text-gray-400 mt-1">{proposal.memo}</p>
                                     </div>
-                                    <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(proposal.status)}`}>
-                                        {proposal.status}
-                                    </span>
+                                    <StatusBadge status={proposal.status} />
                                 </div>
 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
@@ -148,9 +138,10 @@ const Proposals: React.FC = () => {
                                         <span className="text-gray-400">Approvals:</span>
                                         <span className="text-white ml-2 font-medium">{proposal.approvals}/{proposal.threshold}</span>
                                     </div>
-                                    <div className="sm:col-span-2">
+                                    <div className="sm:col-span-2 flex items-center gap-2">
                                         <span className="text-gray-400">Recipient:</span>
-                                        <span className="text-white ml-2 font-mono text-xs">{proposal.recipient}</span>
+                                        <span className="text-white font-mono text-xs truncate max-w-[200px] sm:max-w-none">{proposal.recipient}</span>
+                                        <CopyButton text={proposal.recipient} />
                                     </div>
                                     <div>
                                         <span className="text-gray-400">Created:</span>
