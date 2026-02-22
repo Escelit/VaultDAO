@@ -56,8 +56,9 @@ export default function VaultCloner({ currentConfig, onClone, onClose }: VaultCl
 
             const address = await onClone(config, validSigners);
             setClonedAddress(address);
-        } catch (err: any) {
-            setError(err.message || 'Cloning failed');
+        } catch (err: unknown) {
+            const errorMessage = err instanceof Error ? err.message : 'Cloning failed';
+            setError(errorMessage);
         } finally {
             setCloning(false);
         }

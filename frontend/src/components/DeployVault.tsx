@@ -83,8 +83,9 @@ export default function DeployVault({ onDeploy, onClose }: DeployVaultProps) {
 
             const address = await onDeploy(config, validSigners);
             setDeployedAddress(address);
-        } catch (err: any) {
-            setError(err.message || 'Deployment failed');
+        } catch (err: unknown) {
+            const errorMessage = err instanceof Error ? err.message : 'Deployment failed';
+            setError(errorMessage);
         } finally {
             setDeploying(false);
         }

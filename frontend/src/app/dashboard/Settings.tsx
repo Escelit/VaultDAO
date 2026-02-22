@@ -4,8 +4,13 @@ import {
   clearExportHistory,
   type ExportHistoryItem,
 } from '../../utils/exportHistory';
-import { Download, Trash2, FileText } from 'lucide-react';
+import { Download, Trash2, FileText, Copy, Plus } from 'lucide-react';
 import RoleManagement from '../../components/RoleManagement';
+import VaultCloner from '../../components/VaultCloner';
+import DeployVault from '../../components/DeployVault';
+import type { VaultTemplate } from '../../utils/vaultTemplates';
+
+type VaultConfig = Omit<VaultTemplate['config'], 'signers'>;
 
 /** Item with stored content for re-download (when ExportModal saves it) */
 interface ExportItemWithContent extends ExportHistoryItem {
@@ -70,14 +75,14 @@ const Settings: React.FC = () => {
     timelockDelay: 17280,
   };
 
-  const handleCloneVault = async (config: any, signers: string[]) => {
+  const handleCloneVault = async (config: VaultTemplate['config'], signers: string[]) => {
     // Mock deployment - in real app, call contract deployment
     console.log('Cloning vault with config:', config, 'signers:', signers);
     await new Promise((resolve) => setTimeout(resolve, 2000));
     return 'CNEWVAULT' + Math.random().toString(36).substring(7).toUpperCase();
   };
 
-  const handleDeployVault = async (config: any, signers: string[]) => {
+  const handleDeployVault = async (config: VaultConfig, signers: string[]) => {
     // Mock deployment - in real app, call contract deployment
     console.log('Deploying vault with config:', config, 'signers:', signers);
     await new Promise((resolve) => setTimeout(resolve, 2000));
