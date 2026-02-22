@@ -5,7 +5,8 @@
 use soroban_sdk::{contracttype, Address, Env};
 
 use crate::errors::VaultError;
-use crate::types::{Config, Proposal, Role};
+use crate::types::{Comment, Config, Proposal, Role};
+use soroban_sdk::Vec as SdkVec;
 
 /// Storage key definitions
 #[contracttype]
@@ -29,6 +30,12 @@ pub enum DataKey {
     Recurring(u64),
     /// Next recurring payment ID counter -> u64
     NextRecurringId,
+    /// Comment by ID -> Comment
+    Comment(u64),
+    /// Next comment ID counter -> u64
+    NextCommentId,
+    /// Comment IDs for a proposal -> Vec<u64>
+    ProposalComments(u64),
 }
 
 /// TTL constants (in ledgers, ~5 seconds each)
@@ -214,4 +221,55 @@ pub fn extend_instance_ttl(env: &Env) {
     env.storage()
         .instance()
         .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL);
+}
+
+// ============================================================================
+// Comments
+// ============================================================================
+
+pub fn get_next_comment_id(env: &Env) -> u64 {
+    env.storage()
+        .instance()
+        .get(&DataKey::NextCommentId)
+        .unwrap_or(1)
+}
+
+pub fn increment_comment_id(env: &Env) -> u64 {
+    let id = get_next_comment_id(env);
+    env.storage()
+        .instance()
+        .set(&DataKey::NextCommentId, &(id + 1));
+    id
+}
+
+pub fn set_comment(env: &Env, comment: &Comment) {
+    let key = DataKey::Comment(comment.id);
+    env.storage().persistent().set(&key, comment);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, INSTANCE_TTL_THRESHOLD, INSTANCE_TTL);
+}
+
+pub fn get_comment(env: &Env, id: u64) -> Result<Comment, VaultError> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::Comment(id))
+        .ok_or(VaultError::ProposalNotFound)
+}
+
+pub fn get_proposal_comments(env: &Env, proposal_id: u64) -> SdkVec<u64> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::ProposalComments(proposal_id))
+        .unwrap_or_else(|| SdkVec::new(env))
+}
+
+pub fn add_comment_to_proposal(env: &Env, proposal_id: u64, comment_id: u64) {
+    let mut comments = get_proposal_comments(env, proposal_id);
+    comments.push_back(comment_id);
+    let key = DataKey::ProposalComments(proposal_id);
+    env.storage().persistent().set(&key, &comments);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, INSTANCE_TTL_THRESHOLD, INSTANCE_TTL);
 }

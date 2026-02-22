@@ -70,4 +70,12 @@ pub enum VaultError {
     TransferFailed = 600,
     /// Insufficient vault balance
     InsufficientBalance = 601,
+
+    // Comment errors (7xx)
+    /// Comment not found
+    CommentNotFound = 700,
+    /// Comment text exceeds maximum length
+    CommentTooLong = 701,
+    /// Only comment author can edit
+    NotCommentAuthor = 702,
 }

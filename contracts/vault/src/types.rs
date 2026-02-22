@@ -121,3 +121,23 @@ pub struct RecurringPayment {
     /// Configured status (Active/Stopped)
     pub is_active: bool,
 }
+
+/// Comment on a proposal
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct Comment {
+    /// Unique comment ID
+    pub id: u64,
+    /// ID of the proposal this comment belongs to
+    pub proposal_id: u64,
+    /// Address of the comment author
+    pub author: Address,
+    /// Comment text (max 500 chars)
+    pub text: Symbol,
+    /// Parent comment ID (0 for top-level comments)
+    pub parent_id: u64,
+    /// Ledger when comment was created
+    pub created_at: u64,
+    /// Ledger when comment was last edited (0 if never edited)
+    pub edited_at: u64,
+}

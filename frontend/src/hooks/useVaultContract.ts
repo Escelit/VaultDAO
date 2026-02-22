@@ -12,6 +12,7 @@ import { signTransaction } from '@stellar/freighter-api';
 import { useWallet } from '../context/WalletContextProps';
 import { parseError } from '../utils/errorParser';
 import type { VaultActivity, GetVaultEventsResult, VaultEventType } from '../types/activity';
+import type { Comment } from '../components/CommentThread';
 
 const CONTRACT_ID = "CDXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
 const NETWORK_PASSPHRASE = "Test SDF Network ; September 2015";
@@ -365,5 +366,120 @@ export const useVaultContract = () => {
         }
     };
 
-    return { proposeTransfer, approveProposal, rejectProposal, executeProposal, getDashboardStats, getVaultEvents, loading };
+    const addComment = async (proposalId: string, text: string, parentId: string) => {
+        if (!isConnected || !address) throw new Error("Wallet not connected");
+        setLoading(true);
+        try {
+            const account = await server.getAccount(address);
+            const tx = new TransactionBuilder(account, { fee: "100" })
+                .setNetworkPassphrase(NETWORK_PASSPHRASE)
+                .setTimeout(30)
+                .addOperation(Operation.invokeHostFunction({
+                    func: xdr.HostFunction.hostFunctionTypeInvokeContract(
+                        new xdr.InvokeContractArgs({
+                            contractAddress: Address.fromString(CONTRACT_ID).toScAddress(),
+                            functionName: "add_comment",
+                            args: [
+                                new Address(address).toScVal(),
+                                nativeToScVal(BigInt(proposalId), { type: "u64" }),
+                                xdr.ScVal.scvSymbol(text),
+                                nativeToScVal(BigInt(parentId), { type: "u64" }),
+                            ],
+                        })
+                    ),
+                    auth: [],
+                }))
+                .build();
+
+            const simulation = await server.simulateTransaction(tx);
+            if (SorobanRpc.Api.isSimulationError(simulation)) throw new Error(`Simulation Failed: ${simulation.error}`);
+            const preparedTx = SorobanRpc.assembleTransaction(tx, simulation).build();
+            const signedXdr = await signTransaction(preparedTx.toXDR(), { network: "TESTNET" });
+            const response = await server.sendTransaction(TransactionBuilder.fromXDR(signedXdr as string, NETWORK_PASSPHRASE));
+            return response.hash;
+        } catch (e: unknown) {
+            throw parseError(e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const editComment = async (commentId: string, text: string) => {
+        if (!isConnected || !address) throw new Error("Wallet not connected");
+        setLoading(true);
+        try {
+            const account = await server.getAccount(address);
+            const tx = new TransactionBuilder(account, { fee: "100" })
+                .setNetworkPassphrase(NETWORK_PASSPHRASE)
+                .setTimeout(30)
+                .addOperation(Operation.invokeHostFunction({
+                    func: xdr.HostFunction.hostFunctionTypeInvokeContract(
+                        new xdr.InvokeContractArgs({
+                            contractAddress: Address.fromString(CONTRACT_ID).toScAddress(),
+                            functionName: "edit_comment",
+                            args: [
+                                new Address(address).toScVal(),
+                                nativeToScVal(BigInt(commentId), { type: "u64" }),
+                                xdr.ScVal.scvSymbol(text),
+                            ],
+                        })
+                    ),
+                    auth: [],
+                }))
+                .build();
+
+            const simulation = await server.simulateTransaction(tx);
+            if (SorobanRpc.Api.isSimulationError(simulation)) throw new Error(`Simulation Failed: ${simulation.error}`);
+            const preparedTx = SorobanRpc.assembleTransaction(tx, simulation).build();
+            const signedXdr = await signTransaction(preparedTx.toXDR(), { network: "TESTNET" });
+            const response = await server.sendTransaction(TransactionBuilder.fromXDR(signedXdr as string, NETWORK_PASSPHRASE));
+            return response.hash;
+        } catch (e: unknown) {
+            throw parseError(e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const getProposalComments = async (proposalId: string): Promise<Comment[]> => {
+        try {
+            const mockComments: Comment[] = [
+                {
+                    id: '1',
+                    proposalId,
+                    author: '0x123...456',
+                    text: 'This looks good to me. Ready to approve.',
+                    parentId: '0',
+                    createdAt: new Date().toISOString(),
+                    editedAt: '0',
+                },
+                {
+                    id: '2',
+                    proposalId,
+                    author: '0x789...012',
+                    text: 'Agreed! This will help with the upcoming campaign.',
+                    parentId: '1',
+                    createdAt: new Date().toISOString(),
+                    editedAt: '0',
+                },
+            ];
+            return mockComments;
+        } catch (e) {
+            console.error('Failed to fetch comments:', e);
+            return [];
+        }
+    };
+
+    return { 
+        proposeTransfer, 
+        approveProposal, 
+        rejectProposal, 
+        executeProposal, 
+        getDashboardStats, 
+        getVaultEvents, 
+        addComment, 
+        editComment, 
+        getProposalComments, 
+        loading 
+    };
 };

@@ -1,5 +1,6 @@
-import React, { useEffect } from 'react';
-import { X, Copy, CheckCircle2, Clock, PlayCircle, Ban, UserCheck } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { X, Copy, CheckCircle2, Clock, PlayCircle, Ban, UserCheck, MessageSquare } from 'lucide-react';
+import ProposalComments from '../ProposalComments';
 
 // Define the shape of a Proposal to fix the 'any' error
 export interface Proposal {
@@ -20,6 +21,7 @@ interface ProposalDetailModalProps {
 }
 
 const ProposalDetailModal: React.FC<ProposalDetailModalProps> = ({ isOpen, onClose, proposal }) => {
+    const [activeTab, setActiveTab] = useState<'details' | 'comments'>('details');
     
     // Prevent background scrolling
     useEffect(() => {
@@ -29,6 +31,10 @@ const ProposalDetailModal: React.FC<ProposalDetailModalProps> = ({ isOpen, onClo
             document.body.style.overflow = 'unset';
         }
         return () => { document.body.style.overflow = 'unset'; };
+    }, [isOpen]);
+
+    useEffect(() => {
+        if (isOpen) setActiveTab('details');
     }, [isOpen]);
 
     if (!isOpen || !proposal) return null;
@@ -60,11 +66,37 @@ const ProposalDetailModal: React.FC<ProposalDetailModalProps> = ({ isOpen, onClo
                     </button>
                 </div>
 
+                {/* Tabs */}
+                <div className="flex border-b border-gray-800 bg-gray-900/50">
+                    <button
+                        onClick={() => setActiveTab('details')}
+                        className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                            activeTab === 'details'
+                                ? 'text-purple-400 border-b-2 border-purple-400 bg-purple-500/5'
+                                : 'text-gray-400 hover:text-gray-300'
+                        }`}
+                    >
+                        Details
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('comments')}
+                        className={`flex-1 px-4 py-3 text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+                            activeTab === 'comments'
+                                ? 'text-purple-400 border-b-2 border-purple-400 bg-purple-500/5'
+                                : 'text-gray-400 hover:text-gray-300'
+                        }`}
+                    >
+                        <MessageSquare size={16} />
+                        Comments
+                    </button>
+                </div>
+
                 {/* 2. Scrollable Body */}
                 <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 space-y-8 custom-scrollbar">
-                    
-                    {/* Visual Timeline Section */}
-                    <div>
+                    {activeTab === 'details' ? (
+                        <>
+                            {/* Visual Timeline Section */}
+                            <div>
                         <h3 className="text-gray-500 text-[10px] font-bold uppercase tracking-[0.2em] mb-8">Proposal Lifecycle</h3>
                         <div className="flex justify-between items-start relative px-2">
                             {[
@@ -134,7 +166,7 @@ const ProposalDetailModal: React.FC<ProposalDetailModalProps> = ({ isOpen, onClo
                                 </div>
                             ))}
                         </div>
-                    </div>
+                    </div>\n                        </>\n                    ) : (\n                        <ProposalComments proposalId={proposal.id} />\n                    )}
                 </div>
 
                 {/* 3. Footer */}
