@@ -459,7 +459,7 @@ pub fn get_reputation(env: &Env, addr: &Address) -> Reputation {
     env.storage()
         .persistent()
         .get(&DataKey::Reputation(addr.clone()))
-        .unwrap_or_else(|| Reputation::default())
+        .unwrap_or_else(Reputation::default)
 }
 
 pub fn set_reputation(env: &Env, addr: &Address, rep: &Reputation) {
@@ -528,7 +528,7 @@ pub fn get_notification_prefs(env: &Env, addr: &Address) -> NotificationPreferen
     env.storage()
         .persistent()
         .get(&DataKey::NotificationPrefs(addr.clone()))
-        .unwrap_or_else(|| NotificationPreferences::default())
+        .unwrap_or_else(NotificationPreferences::default)
 }
 
 pub fn set_notification_prefs(env: &Env, addr: &Address, prefs: &NotificationPreferences) {
