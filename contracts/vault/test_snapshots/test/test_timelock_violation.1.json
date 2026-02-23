@@ -66,6 +66,18 @@
                     },
                     {
                       "key": {
+                        "symbol": "threshold_strategy"
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "symbol": "Fixed"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "timelock_delay"
                       },
                       "val": {
@@ -179,6 +191,21 @@
                 },
                 {
                   "symbol": "large"
+                },
+                {
+                  "u32": 1
+                },
+                {
+                  "vec": []
+                },
+                {
+                  "u32": 0
+                },
+                {
+                  "i128": {
+                    "hi": 0,
+                    "lo": 0
+                  }
                 }
               ]
             }
@@ -278,6 +305,55 @@
             "key": {
               "vec": [
                 {
+                  "symbol": "PriorityQueue"
+                },
+                {
+                  "u32": 1
+                }
+              ]
+            },
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+                "key": {
+                  "vec": [
+                    {
+                      "symbol": "PriorityQueue"
+                    },
+                    {
+                      "u32": 1
+                    }
+                  ]
+                },
+                "durability": "persistent",
+                "val": {
+                  "vec": [
+                    {
+                      "u64": 1
+                    }
+                  ]
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          518500
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+            "key": {
+              "vec": [
+                {
                   "symbol": "Proposal"
                 },
                 {
@@ -310,6 +386,14 @@
                   "map": [
                     {
                       "key": {
+                        "symbol": "abstentions"
+                      },
+                      "val": {
+                        "vec": []
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "amount"
                       },
                       "val": {
@@ -329,6 +413,30 @@
                             "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                           }
                         ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "attachments"
+                      },
+                      "val": {
+                        "vec": []
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "condition_logic"
+                      },
+                      "val": {
+                        "u32": 0
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "conditions"
+                      },
+                      "val": {
+                        "vec": []
                       }
                     },
                     {
@@ -357,10 +465,29 @@
                     },
                     {
                       "key": {
+                        "symbol": "insurance_amount"
+                      },
+                      "val": {
+                        "i128": {
+                          "hi": 0,
+                          "lo": 0
+                        }
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "memo"
                       },
                       "val": {
                         "symbol": "large"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "priority"
+                      },
+                      "val": {
+                        "u32": 1
                       }
                     },
                     {
@@ -410,6 +537,100 @@
             "ext": "v0"
           },
           121060
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+            "key": {
+              "vec": [
+                {
+                  "symbol": "Reputation"
+                },
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                }
+              ]
+            },
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+                "key": {
+                  "vec": [
+                    {
+                      "symbol": "Reputation"
+                    },
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                    }
+                  ]
+                },
+                "durability": "persistent",
+                "val": {
+                  "map": [
+                    {
+                      "key": {
+                        "symbol": "approvals_given"
+                      },
+                      "val": {
+                        "u32": 1
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "last_decay_ledger"
+                      },
+                      "val": {
+                        "u64": 100
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "proposals_created"
+                      },
+                      "val": {
+                        "u32": 1
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "proposals_executed"
+                      },
+                      "val": {
+                        "u32": 0
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "proposals_rejected"
+                      },
+                      "val": {
+                        "u32": 0
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "score"
+                      },
+                      "val": {
+                        "u32": 502
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          518500
         ]
       ],
       [
@@ -675,6 +896,18 @@
                               },
                               "val": {
                                 "u32": 1
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "threshold_strategy"
+                              },
+                              "val": {
+                                "vec": [
+                                  {
+                                    "symbol": "Fixed"
+                                  }
+                                ]
                               }
                             },
                             {
