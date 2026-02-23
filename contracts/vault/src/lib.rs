@@ -275,6 +275,187 @@ impl VaultDAO {
         Ok(proposal_id)
     }
 
+    /// Propose multiple transfers in a single batch, supporting multiple token types.
+    ///
+    /// Creates separate proposals for each transfer, enabling complex treasury operations
+    /// like portfolio rebalancing with atomic multi-token transfers.
+    ///
+    /// # Arguments
+    /// * `proposer` - The address initiating the proposals (must authorize).
+    /// * `transfers` - Vector of transfer details (recipient, token, amount, memo).
+    /// * `priority` - Urgency level applied to all proposals.
+    /// * `conditions` - Optional execution conditions applied to all proposals.
+    /// * `condition_logic` - And/Or logic for combining conditions.
+    /// * `insurance_amount` - Total insurance staked across all proposals.
+    ///
+    /// # Returns
+    /// Vector of proposal IDs created.
+    #[allow(clippy::too_many_arguments)]
+    pub fn batch_propose_transfers(
+        env: Env,
+        proposer: Address,
+        transfers: Vec<types::TransferDetails>,
+        priority: Priority,
+        conditions: Vec<Condition>,
+        condition_logic: ConditionLogic,
+        insurance_amount: i128,
+    ) -> Result<Vec<u64>, VaultError> {
+        proposer.require_auth();
+
+        if transfers.len() > MAX_BATCH_SIZE {
+            return Err(VaultError::BatchTooLarge);
+        }
+
+        let config = storage::get_config(&env)?;
+        let role = storage::get_role(&env, &proposer);
+        if role != Role::Treasurer && role != Role::Admin {
+            return Err(VaultError::InsufficientRole);
+        }
+
+        // Velocity check once for the batch
+        if !storage::check_and_update_velocity(&env, &proposer, &config.velocity_limit) {
+            return Err(VaultError::VelocityLimitExceeded);
+        }
+
+        let today = storage::get_day_number(&env);
+        let week = storage::get_week_number(&env);
+        let mut total_amount = 0i128;
+        let mut token_amounts: Vec<(Address, i128)> = Vec::new(&env);
+
+        // Pre-validate all transfers and calculate totals per token
+        for i in 0..transfers.len() {
+            let transfer = transfers.get(i).unwrap();
+            
+            if transfer.amount <= 0 {
+                return Err(VaultError::InvalidAmount);
+            }
+            if transfer.amount > config.spending_limit {
+                return Err(VaultError::ExceedsProposalLimit);
+            }
+
+            Self::validate_recipient(&env, &transfer.recipient)?;
+            total_amount += transfer.amount;
+
+            // Track per-token amounts
+            let mut found = false;
+            for j in 0..token_amounts.len() {
+                let mut entry = token_amounts.get(j).unwrap();
+                if entry.0 == transfer.token {
+                    entry.1 += transfer.amount;
+                    token_amounts.set(j, entry);
+                    found = true;
+                    break;
+                }
+            }
+            if !found {
+                token_amounts.push_back((transfer.token.clone(), transfer.amount));
+            }
+        }
+
+        // Check aggregate limits
+        let spent_today = storage::get_daily_spent(&env, today);
+        if spent_today + total_amount > config.daily_limit {
+            return Err(VaultError::ExceedsDailyLimit);
+        }
+
+        let spent_week = storage::get_weekly_spent(&env, week);
+        if spent_week + total_amount > config.weekly_limit {
+            return Err(VaultError::ExceedsWeeklyLimit);
+        }
+
+        // Handle insurance
+        let insurance_config = storage::get_insurance_config(&env);
+        let mut actual_insurance = insurance_amount;
+        if insurance_config.enabled && total_amount >= insurance_config.min_amount {
+            let mut min_required = total_amount * insurance_config.min_insurance_bps as i128 / 10_000;
+            let rep = storage::get_reputation(&env, &proposer);
+            if rep.score >= 750 {
+                min_required /= 2;
+            }
+            if actual_insurance < min_required {
+                return Err(VaultError::InsuranceInsufficient);
+            }
+        } else {
+            actual_insurance = if insurance_amount > 0 { insurance_amount } else { 0 };
+        }
+
+        // Lock insurance if required (use first token in batch)
+        if actual_insurance > 0 && !transfers.is_empty() {
+            let first_token = transfers.get(0).unwrap().token;
+            token::transfer_to_vault(&env, &first_token, &proposer, actual_insurance);
+        }
+
+        // Reserve spending
+        storage::add_daily_spent(&env, today, total_amount);
+        storage::add_weekly_spent(&env, week, total_amount);
+
+        // Create proposals
+        let current_ledger = env.ledger().sequence() as u64;
+        let mut proposal_ids = Vec::new(&env);
+        let insurance_per_proposal = if transfers.len() > 0 {
+            actual_insurance / transfers.len() as i128
+        } else {
+            0
+        };
+
+        for i in 0..transfers.len() {
+            let transfer = transfers.get(i).unwrap();
+            let proposal_id = storage::increment_proposal_id(&env);
+
+            let proposal = Proposal {
+                id: proposal_id,
+                proposer: proposer.clone(),
+                recipient: transfer.recipient.clone(),
+                token: transfer.token.clone(),
+                amount: transfer.amount,
+                memo: transfer.memo.clone(),
+                approvals: Vec::new(&env),
+                abstentions: Vec::new(&env),
+                attachments: Vec::new(&env),
+                status: ProposalStatus::Pending,
+                priority: priority.clone(),
+                conditions: conditions.clone(),
+                condition_logic: condition_logic.clone(),
+                created_at: current_ledger,
+                expires_at: current_ledger + PROPOSAL_EXPIRY_LEDGERS,
+                unlock_ledger: 0,
+                insurance_amount: insurance_per_proposal,
+                is_swap: false,
+            };
+
+            storage::set_proposal(&env, &proposal);
+            storage::add_to_priority_queue(&env, priority.clone() as u32, proposal_id);
+            proposal_ids.push_back(proposal_id);
+
+            events::emit_proposal_created(
+                &env,
+                proposal_id,
+                &proposer,
+                &transfer.recipient,
+                &transfer.token,
+                transfer.amount,
+                insurance_per_proposal,
+            );
+        }
+
+        storage::extend_instance_ttl(&env);
+
+        if actual_insurance > 0 {
+            let first_token = transfers.get(0).unwrap().token;
+            events::emit_insurance_locked(
+                &env,
+                proposal_ids.get(0).unwrap(),
+                &proposer,
+                actual_insurance,
+                &first_token,
+            );
+        }
+
+        Self::update_reputation_on_propose(&env, &proposer);
+
+        Ok(proposal_ids)
+    }
+
     /// Approve a pending proposal.
     ///
     /// Approval requires `require_auth()` from a valid signer.

@@ -438,3 +438,21 @@ pub struct CrossChainTransferParams {
     pub amount: i128,
     pub token: Address,
 }
+
+// ============================================================================
+// Multi-Token Batch Transfers (Issue: feature/multi-token-batch-transfers)
+// ============================================================================
+
+/// Transfer details for batch operations supporting multiple tokens
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct TransferDetails {
+    /// Recipient of the transfer
+    pub recipient: Address,
+    /// Token contract address
+    pub token: Address,
+    /// Amount to transfer
+    pub amount: i128,
+    /// Optional memo
+    pub memo: Symbol,
+}

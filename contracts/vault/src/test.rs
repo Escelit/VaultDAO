@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use super::*;
-use crate::types::{AmountTier, DexConfig, SwapProposal, TimeBasedThreshold, VelocityConfig};
+use crate::types::{AmountTier, DexConfig, SwapProposal, TimeBasedThreshold, TransferDetails, VelocityConfig};
 use crate::{InitConfig, VaultDAO, VaultDAOClient};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
@@ -2240,4 +2240,274 @@ fn test_slippage_protection() {
     // Proposal should be created successfully
     let proposal = client.get_proposal(&proposal_id);
     assert_eq!(proposal.status, ProposalStatus::Pending);
+}
+
+// ============================================================================
+// Multi-Token Batch Transfer Tests
+// ============================================================================
+
+#[test]
+fn test_batch_propose_multi_token() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let treasurer = Address::generate(&env);
+    let recipient1 = Address::generate(&env);
+    let recipient2 = Address::generate(&env);
+
+    let client = VaultDAOClient::new(&env, &env.register(VaultDAO, ()));
+    let token1 = Address::generate(&env);
+    let token2 = Address::generate(&env);
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    signers.push_back(treasurer.clone());
+
+    let config = InitConfig {
+        signers,
+        threshold: 2,
+        spending_limit: 5_000,
+        daily_limit: 20_000,
+        weekly_limit: 50_000,
+        timelock_threshold: 10_000,
+        timelock_delay: 100,
+        velocity_limit: VelocityConfig {
+            limit: 100,
+            window: 3600,
+        },
+        threshold_strategy: ThresholdStrategy::Fixed,
+    };
+    client.initialize(&admin, &config);
+    client.set_role(&admin, &treasurer, &Role::Treasurer);
+
+    // Create batch with multiple tokens
+    let mut transfers = Vec::new(&env);
+    transfers.push_back(TransferDetails {
+        recipient: recipient1.clone(),
+        token: token1.clone(),
+        amount: 1000,
+        memo: Symbol::new(&env, "payment1"),
+    });
+    transfers.push_back(TransferDetails {
+        recipient: recipient2.clone(),
+        token: token2.clone(),
+        amount: 2000,
+        memo: Symbol::new(&env, "payment2"),
+    });
+
+    let proposal_ids = client.batch_propose_transfers(
+        &treasurer,
+        &transfers,
+        &Priority::Normal,
+        &Vec::new(&env),
+        &ConditionLogic::And,
+        &0i128,
+    );
+
+    assert_eq!(proposal_ids.len(), 2);
+
+    // Verify first proposal
+    let proposal1 = client.get_proposal(&proposal_ids.get(0).unwrap());
+    assert_eq!(proposal1.recipient, recipient1);
+    assert_eq!(proposal1.token, token1);
+    assert_eq!(proposal1.amount, 1000);
+    assert_eq!(proposal1.status, ProposalStatus::Pending);
+
+    // Verify second proposal
+    let proposal2 = client.get_proposal(&proposal_ids.get(1).unwrap());
+    assert_eq!(proposal2.recipient, recipient2);
+    assert_eq!(proposal2.token, token2);
+    assert_eq!(proposal2.amount, 2000);
+    assert_eq!(proposal2.status, ProposalStatus::Pending);
+}
+
+#[test]
+fn test_batch_propose_spending_limits() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let treasurer = Address::generate(&env);
+    let recipient = Address::generate(&env);
+
+    let client = VaultDAOClient::new(&env, &env.register(VaultDAO, ()));
+    let token = Address::generate(&env);
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    signers.push_back(treasurer.clone());
+
+    let config = InitConfig {
+        signers,
+        threshold: 2,
+        spending_limit: 5_000,
+        daily_limit: 8_000, // Low daily limit
+        weekly_limit: 50_000,
+        timelock_threshold: 10_000,
+        timelock_delay: 100,
+        velocity_limit: VelocityConfig {
+            limit: 100,
+            window: 3600,
+        },
+        threshold_strategy: ThresholdStrategy::Fixed,
+    };
+    client.initialize(&admin, &config);
+    client.set_role(&admin, &treasurer, &Role::Treasurer);
+
+    let mut transfers = Vec::new(&env);
+    transfers.push_back(TransferDetails {
+        recipient: recipient.clone(),
+        token: token.clone(),
+        amount: 4000,
+        memo: Symbol::new(&env, "payment1"),
+    });
+    transfers.push_back(TransferDetails {
+        recipient: recipient.clone(),
+        token: token.clone(),
+        amount: 5000, // Total 9000 exceeds daily limit
+        memo: Symbol::new(&env, "payment2"),
+    });
+
+    let result = client.try_batch_propose_transfers(
+        &treasurer,
+        &transfers,
+        &Priority::Normal,
+        &Vec::new(&env),
+        &ConditionLogic::And,
+        &0i128,
+    );
+
+    assert_eq!(result, Err(Ok(VaultError::ExceedsDailyLimit)));
+}
+
+#[test]
+fn test_batch_propose_atomic_execution() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let treasurer = Address::generate(&env);
+    let signer2 = Address::generate(&env);
+    let recipient = Address::generate(&env);
+
+    let client = VaultDAOClient::new(&env, &env.register(VaultDAO, ()));
+    let token1 = Address::generate(&env);
+    let token2 = Address::generate(&env);
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    signers.push_back(treasurer.clone());
+    signers.push_back(signer2.clone());
+
+    let config = InitConfig {
+        signers,
+        threshold: 2,
+        spending_limit: 5_000,
+        daily_limit: 20_000,
+        weekly_limit: 50_000,
+        timelock_threshold: 10_000,
+        timelock_delay: 100,
+        velocity_limit: VelocityConfig {
+            limit: 100,
+            window: 3600,
+        },
+        threshold_strategy: ThresholdStrategy::Fixed,
+    };
+    client.initialize(&admin, &config);
+    client.set_role(&admin, &treasurer, &Role::Treasurer);
+    client.set_role(&admin, &signer2, &Role::Treasurer);
+
+    let mut transfers = Vec::new(&env);
+    transfers.push_back(TransferDetails {
+        recipient: recipient.clone(),
+        token: token1.clone(),
+        amount: 1000,
+        memo: Symbol::new(&env, "payment1"),
+    });
+    transfers.push_back(TransferDetails {
+        recipient: recipient.clone(),
+        token: token2.clone(),
+        amount: 2000,
+        memo: Symbol::new(&env, "payment2"),
+    });
+
+    let proposal_ids = client.batch_propose_transfers(
+        &treasurer,
+        &transfers,
+        &Priority::Normal,
+        &Vec::new(&env),
+        &ConditionLogic::And,
+        &0i128,
+    );
+
+    // Approve all proposals
+    for i in 0..proposal_ids.len() {
+        let pid = proposal_ids.get(i).unwrap();
+        client.approve_proposal(&treasurer, &pid);
+        client.approve_proposal(&signer2, &pid);
+    }
+
+    // Verify all proposals are approved
+    for i in 0..proposal_ids.len() {
+        let pid = proposal_ids.get(i).unwrap();
+        let proposal = client.get_proposal(&pid);
+        assert_eq!(proposal.status, ProposalStatus::Approved);
+    }
+}
+
+#[test]
+fn test_batch_propose_exceeds_max_size() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let treasurer = Address::generate(&env);
+    let recipient = Address::generate(&env);
+
+    let client = VaultDAOClient::new(&env, &env.register(VaultDAO, ()));
+    let token = Address::generate(&env);
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    signers.push_back(treasurer.clone());
+
+    let config = InitConfig {
+        signers,
+        threshold: 2,
+        spending_limit: 5_000,
+        daily_limit: 100_000,
+        weekly_limit: 500_000,
+        timelock_threshold: 10_000,
+        timelock_delay: 100,
+        velocity_limit: VelocityConfig {
+            limit: 100,
+            window: 3600,
+        },
+        threshold_strategy: ThresholdStrategy::Fixed,
+    };
+    client.initialize(&admin, &config);
+    client.set_role(&admin, &treasurer, &Role::Treasurer);
+
+    // Create batch exceeding MAX_BATCH_SIZE (10)
+    let mut transfers = Vec::new(&env);
+    for _ in 0..11 {
+        transfers.push_back(TransferDetails {
+            recipient: recipient.clone(),
+            token: token.clone(),
+            amount: 100,
+            memo: Symbol::new(&env, "payment"),
+        });
+    }
+
+    let result = client.try_batch_propose_transfers(
+        &treasurer,
+        &transfers,
+        &Priority::Normal,
+        &Vec::new(&env),
+        &ConditionLogic::And,
+        &0i128,
+    );
+
+    assert_eq!(result, Err(Ok(VaultError::BatchTooLarge)));
 }
