@@ -10,6 +10,15 @@ import ProposalFilters, { type FilterState } from '../../components/proposals/Pr
 import { useToast } from '../../hooks/useToast';
 import { useVaultContract } from '../../hooks/useVaultContract';
 import { useWallet } from '../../context/WalletContextProps';
+import type { TokenInfo } from '../../constants/tokens';
+import { DEFAULT_TOKENS } from '../../constants/tokens';
+import { formatTokenBalance } from '../../utils/formatters';
+
+interface TokenBalance {
+  token: TokenInfo;
+  balance: string;
+  isLoading: boolean;
+}
 
 const CopyButton = ({ text }: { text: string }) => (
   <button
@@ -61,7 +70,7 @@ const Proposals: React.FC = () => {
   const [selectedProposal, setSelectedProposal] = useState<Proposal | null>(null);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
-  // const [tokenBalances, setTokenBalances] = useState<TokenBalance[]>([]);
+  const [tokenBalances, setTokenBalances] = useState<TokenBalance[]>([]);
 
   const [activeFilters, setActiveFilters] = useState<FilterState>({
     search: '',
@@ -77,7 +86,7 @@ const Proposals: React.FC = () => {
     amount: '',
     memo: '',
   });
-  // const [selectedToken, setSelectedToken] = useState<TokenInfo | null>(null);
+  const [selectedToken, setSelectedToken] = useState<TokenInfo | null>(null);
 
   // Fetch token balances
   useEffect(() => {
@@ -273,7 +282,7 @@ const Proposals: React.FC = () => {
   // Find the selected token balance
   const selectedTokenBalance = useMemo(() => {
     if (!selectedToken) return null;
-    return tokenBalances.find(tb => tb.token.address === selectedToken.address);
+    return tokenBalances.find((tb: TokenBalance) => tb.token.address === selectedToken.address);
   }, [tokenBalances, selectedToken]);
 
   // Compute amount error
@@ -296,7 +305,7 @@ const Proposals: React.FC = () => {
   // Initialize selected token when tokenBalances load
   useEffect(() => {
     if (!selectedToken && tokenBalances.length > 0) {
-      const xlmToken = tokenBalances.find(tb => tb.token.address === 'NATIVE');
+      const xlmToken = tokenBalances.find((tb: TokenBalance) => tb.token.address === 'NATIVE');
       if (xlmToken) {
         setSelectedToken(xlmToken.token);
       } else {

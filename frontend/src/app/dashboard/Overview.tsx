@@ -11,6 +11,12 @@ import type { TokenInfo } from '../../constants/tokens';
 import { isValidStellarAddress } from '../../constants/tokens';
 import { formatTokenAmount } from '../../utils/formatters';
 
+interface TokenBalance {
+    token: TokenInfo;
+    balance: string;
+    isLoading: boolean;
+}
+
 interface DashboardStats {
     totalBalance: string;
     totalProposals: number;

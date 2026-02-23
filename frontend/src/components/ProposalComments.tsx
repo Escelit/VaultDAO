@@ -28,7 +28,7 @@ const ProposalComments: React.FC<ProposalCommentsProps> = ({ proposalId, signers
     if (!proposalId) return;
     setFetching(true);
     try {
-      const fetchedComments = await getProposalComments(proposalId);
+      const fetchedComments = await getProposalComments(Number(proposalId));
       const threaded = buildCommentTree(fetchedComments);
       setComments(threaded);
     } catch (err) {
@@ -117,7 +117,7 @@ const ProposalComments: React.FC<ProposalCommentsProps> = ({ proposalId, signers
   const handleReply = async (parentId: string, text: string) => {
     if (!address) return;
     try {
-      await addComment(proposalId, text, parentId);
+      await addComment(Number(proposalId), text, parentId);
       notify('new_proposal', 'Reply added successfully', 'success');
       await fetchComments();
     } catch (err: any) {
@@ -129,7 +129,7 @@ const ProposalComments: React.FC<ProposalCommentsProps> = ({ proposalId, signers
   const handleEdit = async (commentId: string, text: string) => {
     if (!address) return;
     try {
-      await editComment(commentId, text);
+      await editComment(Number(commentId), text);
       notify('new_proposal', 'Comment updated successfully', 'success');
       await fetchComments();
     } catch (err: any) {
