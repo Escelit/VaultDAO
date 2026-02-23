@@ -28,7 +28,7 @@ const simulationCache: SimulationCache = {};
 /**
  * Generate cache key from transaction parameters
  */
-export function generateCacheKey(params: Record<string, any>): string {
+export function generateCacheKey(params: Record<string, unknown>): string {
     return JSON.stringify(params);
 }
 
@@ -76,14 +76,14 @@ export function stroopsToXLM(stroops: string | number): string {
 /**
  * Parse simulation error and provide user-friendly message
  */
-export function parseSimulationError(error: any): { message: string; code?: string; suggestion?: string } {
+export function parseSimulationError(error: unknown): { message: string; code?: string; suggestion?: string } {
     if (typeof error === 'string') {
         return { message: error };
     }
 
     // Handle Soroban RPC simulation errors
-    if (error?.error) {
-        const errorMsg = error.error;
+    if (error && typeof error === 'object' && 'error' in error) {
+        const errorMsg = String((error as { error: unknown }).error || '');
 
         // Common error patterns
         if (errorMsg.includes('insufficient')) {
@@ -145,7 +145,7 @@ export function parseSimulationError(error: any): { message: string; code?: stri
         return { message: errorMsg };
     }
 
-    return { message: error?.message || 'Simulation failed' };
+    return { message: error instanceof Error ? error.message : "Simulation failed" };
 }
 
 /**
@@ -154,7 +154,7 @@ export function parseSimulationError(error: any): { message: string; code?: stri
 export function extractStateChanges(
     simulation: SorobanRpc.Api.SimulateTransactionResponse,
     actionType: string,
-    params?: Record<string, any>
+    params?: Record<string, unknown>
 ): StateChange[] {
     const changes: StateChange[] = [];
 
@@ -169,13 +169,13 @@ export function extractStateChanges(
                 changes.push({
                     type: 'proposal',
                     description: 'New proposal created',
-                    after: `Transfer ${stroopsToXLM(params.amount)} XLM to ${params.recipient.slice(0, 8)}...`,
+                    after: `Transfer ${stroopsToXLM(String(params.amount || ""))} XLM to ${String(params.recipient || "").slice(0, 8)}...`,
                 });
                 changes.push({
                     type: 'balance',
                     description: 'Daily spending limit',
                     before: 'Current usage',
-                    after: `+${stroopsToXLM(params.amount)} XLM`,
+                    after: `+${stroopsToXLM(String(params.amount || ""))} XLM`,
                 });
             }
             break;
@@ -198,7 +198,7 @@ export function extractStateChanges(
                 changes.push({
                     type: 'balance',
                     description: 'Vault balance',
-                    after: `-${stroopsToXLM(params.amount)} XLM`,
+                    after: `-${stroopsToXLM(String(params.amount || ""))} XLM`,
                 });
                 changes.push({
                     type: 'proposal',

@@ -26,13 +26,13 @@ export default function TransactionSimulator({
         try {
             const result = await onSimulate();
             setSimulationResult(result);
-        } catch (error: any) {
+        } catch (error: unknown) {
             setSimulationResult({
                 success: false,
                 fee: '0',
                 feeXLM: '0',
                 resourceFee: '0',
-                error: error.message || 'Simulation failed',
+                error: error instanceof Error ? error.message : "Simulation failed",
                 timestamp: Date.now(),
             });
         } finally {

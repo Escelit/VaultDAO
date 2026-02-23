@@ -342,7 +342,7 @@ export const useVaultContract = () => {
     const simulateTransaction = async (
         functionName: string,
         args: xdr.ScVal[],
-        params?: Record<string, any>
+        params?: Record<string, unknown>
     ): Promise<SimulationResult> => {
         if (!address) {
             throw new Error("Wallet not connected");
@@ -404,7 +404,7 @@ export const useVaultContract = () => {
 
             cacheSimulation(cacheKey, result);
             return result;
-        } catch (error: any) {
+        } catch (error: unknown) {
             const errorInfo = parseSimulationError(error);
             const result: SimulationResult = {
                 success: false,
@@ -483,6 +483,24 @@ export const useVaultContract = () => {
         return simulateTransaction('reject_proposal', args, { proposalId });
     };
 
+    const getProposalSignatures = useCallback(async (proposalId: number) => {
+        console.log('Getting signatures for proposal:', proposalId);
+        return Promise.resolve([
+            { address: 'GABC...XYZ', name: 'Signer 1', signed: true, timestamp: new Date().toISOString() },
+            { address: 'GDEF...UVW', name: 'Signer 2', signed: false, timestamp: undefined },
+        ]);
+    }, []);
+
+    const remindSigner = useCallback(async (proposalId: number, signerAddress: string) => {
+        console.log('Reminding signer:', signerAddress, 'for proposal:', proposalId);
+        return Promise.resolve();
+    }, []);
+
+    const exportSignatures = useCallback(async (proposalId: number) => {
+        console.log('Exporting signatures for proposal:', proposalId);
+        return Promise.resolve();
+    }, []);
+
     return {
         proposeTransfer,
         rejectProposal,
@@ -494,5 +512,8 @@ export const useVaultContract = () => {
         simulateApproveProposal,
         simulateExecuteProposal,
         simulateRejectProposal,
+        getProposalSignatures,
+        remindSigner,
+        exportSignatures,
     };
 };
