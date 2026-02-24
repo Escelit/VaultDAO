@@ -185,7 +185,6 @@ impl VaultDAO {
         };
 
         storage::set_proposal(&env, &proposal);
-        storage::add_to_priority_queue(&env, 0, proposal_id);
 
         // Extend TTL to ensure persistent data stays alive
         storage::extend_instance_ttl(&env);

@@ -52,8 +52,6 @@ pub enum DataKey {
     NextAuditId,
     /// Last audit entry hash
     LastAuditHash,
-    /// Priority queue for proposals
-    PriorityQueue(u32),
 }
 
 /// TTL constants (in ledgers, ~5 seconds each)
@@ -380,18 +378,6 @@ pub fn add_comment_to_proposal(env: &Env, proposal_id: u64, comment_id: u64) {
     env.storage()
         .persistent()
         .extend_ttl(&key, INSTANCE_TTL_THRESHOLD, INSTANCE_TTL);
-}
-
-// ============================================================================
-// Priority Queue
-// ============================================================================
-
-pub fn add_to_priority_queue(env: &Env, priority: u32, proposal_id: u64) {
-    let key = DataKey::PriorityQueue(priority);
-    let mut queue: SdkVec<u64> = env.storage().persistent().get(&key).unwrap_or_else(|| SdkVec::new(env));
-    queue.push_back(proposal_id);
-    env.storage().persistent().set(&key, &queue);
-    env.storage().persistent().extend_ttl(&key, INSTANCE_TTL_THRESHOLD, INSTANCE_TTL);
 }
 
 // ============================================================================
