@@ -2,7 +2,7 @@
 //!
 //! Core data structures for the multisig treasury contract.
 
-use soroban_sdk::{contracttype, Address, Symbol, Vec};
+use soroban_sdk::{contracttype, Address, String, Symbol, Vec};
 
 /// Initialization configuration - groups all config params to reduce function arguments
 #[contracttype]
@@ -12,6 +12,9 @@ pub struct InitConfig {
     pub signers: Vec<Address>,
     /// Required number of approvals (M in M-of-N)
     pub threshold: u32,
+    /// Minimum number of votes (approvals + abstentions) required before threshold is checked.
+    /// Set to 0 to disable quorum enforcement.
+    pub quorum: u32,
     /// Maximum amount per proposal (in stroops)
     pub spending_limit: i128,
     /// Maximum aggregate daily spending (in stroops)
@@ -25,6 +28,8 @@ pub struct InitConfig {
     pub velocity_limit: VelocityConfig,
     /// Threshold strategy configuration
     pub threshold_strategy: ThresholdStrategy,
+    /// Default voting deadline in ledgers (0 = no deadline)
+    pub default_voting_deadline: u64,
 }
 
 /// Vault configuration
@@ -35,6 +40,9 @@ pub struct Config {
     pub signers: Vec<Address>,
     /// Required number of approvals (M in M-of-N)
     pub threshold: u32,
+    /// Minimum number of votes (approvals + abstentions) required before threshold is checked.
+    /// Set to 0 to disable quorum enforcement.
+    pub quorum: u32,
     /// Maximum amount per proposal (in stroops)
     pub spending_limit: i128,
     /// Maximum aggregate daily spending (in stroops)
@@ -48,6 +56,19 @@ pub struct Config {
     pub velocity_limit: VelocityConfig,
     /// Threshold strategy configuration
     pub threshold_strategy: ThresholdStrategy,
+    /// Default voting deadline in ledgers (0 = no deadline)
+    pub default_voting_deadline: u64,
+}
+
+/// Audit record for a cancelled proposal
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct CancellationRecord {
+    pub proposal_id: u64,
+    pub cancelled_by: Address,
+    pub reason: Symbol,
+    pub cancelled_at_ledger: u64,
+    pub refunded_amount: i128,
 }
 
 /// Threshold strategy for dynamic approval requirements
@@ -114,6 +135,54 @@ pub enum ProposalStatus {
     Rejected = 3,
     /// Reached expiration ledger without hitting the approval threshold.
     Expired = 4,
+    /// Cancelled by proposer or admin, with spending refunded.
+    Cancelled = 5,
+}
+
+/// Proposal priority level for queue ordering
+#[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum Priority {
+    Low = 0,
+    Normal = 1,
+    High = 2,
+    Critical = 3,
+}
+
+/// Execution condition type
+#[contracttype]
+#[derive(Clone, Debug)]
+pub enum Condition {
+    /// Execute only when balance is above threshold
+    BalanceAbove(i128),
+    /// Execute only after this ledger sequence
+    DateAfter(u64),
+    /// Execute only before this ledger sequence
+    DateBefore(u64),
+}
+
+/// Logic for combining multiple conditions
+#[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum ConditionLogic {
+    /// All conditions must be true
+    And = 0,
+    /// At least one condition must be true
+    Or = 1,
+}
+
+/// Recipient list access mode
+#[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ListMode {
+    /// No restriction on recipients
+    Disabled,
+    /// Only whitelisted recipients are allowed
+    Whitelist,
+    /// Blacklisted recipients are blocked
+    Blacklist,
 }
 
 /// Transfer proposal
@@ -134,14 +203,52 @@ pub struct Proposal {
     pub memo: Symbol,
     /// Addresses that have approved
     pub approvals: Vec<Address>,
+    /// Addresses that explicitly abstained
+    pub abstentions: Vec<Address>,
+    /// IPFS hashes of supporting documents
+    pub attachments: Vec<String>,
     /// Current status
     pub status: ProposalStatus,
+    /// Proposal urgency level
+    pub priority: Priority,
+    /// Execution conditions
+    pub conditions: Vec<Condition>,
+    /// Logic operator for combining conditions
+    pub condition_logic: ConditionLogic,
     /// Ledger sequence when created
     pub created_at: u64,
     /// Ledger sequence when proposal expires
     pub expires_at: u64,
     /// Earliest ledger sequence when proposal can be executed (0 if no timelock)
     pub unlock_ledger: u64,
+    /// Insurance amount staked by proposer (0 = no insurance). Held in vault.
+    pub insurance_amount: i128,
+    /// Gas (CPU instruction) limit for execution (0 = use global config default)
+    pub gas_limit: u64,
+    /// Estimated gas used during execution (populated on execution)
+    pub gas_used: u64,
+    /// Ledger sequence at which signers were snapshotted for this proposal
+    pub snapshot_ledger: u64,
+    /// Voting power snapshot — addresses eligible to vote at creation time
+    pub snapshot_signers: Vec<Address>,
+    /// Flag indicating if this is a swap proposal
+    pub is_swap: bool,
+    /// Ledger sequence when voting must complete (0 = no deadline)
+    pub voting_deadline: u64,
+}
+
+/// On-chain comment on a proposal
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct Comment {
+    pub id: u64,
+    pub proposal_id: u64,
+    pub author: Address,
+    pub text: Symbol,
+    /// Parent comment ID (0 = top-level)
+    pub parent_id: u64,
+    pub created_at: u64,
+    pub edited_at: u64,
 }
 
 /// Recurring payment schedule
@@ -164,7 +271,6 @@ pub struct RecurringPayment {
     pub is_active: bool,
 }
 
-// Add this new struct to types.rs
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct VelocityConfig {

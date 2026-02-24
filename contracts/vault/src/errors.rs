@@ -1,12 +1,9 @@
-//! VaultDAO - Error Types
-//!
-//! Custom error enum for all contract failure cases.
+//! VaultDAO - Error Definitions
 
 use soroban_sdk::contracterror;
 
-/// Contract error codes
 #[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 #[repr(u32)]
 pub enum VaultError {
     // Initialization errors (1xx)
