@@ -91,15 +91,11 @@ pub enum VaultError {
     ChainNotSupported = 173,
     ExceedsBridgeLimit = 175,
 
-    // Reputation
-    ReputationTooLow = 180,
-
     // Retry errors
     MaxRetriesExceeded = 190,
     RetryBackoffNotElapsed = 191,
     RetryNotEnabled = 192,
-    // Expiration errors (reuse existing codes where possible)
-    // ExpirationDisabled - use RetryNotEnabled (192)
-    // ProposalNotExpired - use ProposalNotPending (21)
-    // GracePeriodNotPassed - use TimelockNotExpired (60)
+
+    // Cross-vault errors
+    XVaultNotEnabled = 200,
 }

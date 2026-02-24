@@ -403,45 +403,117 @@ pub fn emit_retries_exhausted(env: &Env, proposal_id: u64, total_attempts: u32) 
 }
 
 // ============================================================================
-// Expiration Events (feature/proposal-expiration)
+// Cross-Vault Events (feature/cross-vault-coordination)
 // ============================================================================
 
-/// Emit when a proposal expires
-pub fn emit_proposal_expired(env: &Env, proposal_id: u64, expired_at: u64) {
-    env.events().publish(
-        (Symbol::new(env, "proposal_expired"), proposal_id),
-        expired_at,
-    );
-}
-
-/// Emit when an expired proposal is cleaned up
-pub fn emit_proposal_cleaned_up(
+/// Emit when a cross-vault proposal is created
+pub fn emit_cross_vault_proposed(
     env: &Env,
     proposal_id: u64,
-    cleaned_by: &Address,
-    refunded_insurance: i128,
+    proposer: &Address,
+    num_actions: u32,
 ) {
     env.events().publish(
-        (Symbol::new(env, "proposal_cleaned_up"), proposal_id),
-        (cleaned_by.clone(), refunded_insurance),
+        (Symbol::new(env, "xvault_proposed"), proposal_id),
+        (proposer.clone(), num_actions),
     );
 }
 
-/// Emit when a batch cleanup operation completes
-pub fn emit_batch_cleanup_completed(
+/// Emit when cross-vault execution starts
+pub fn emit_cross_vault_execution_started(
     env: &Env,
-    cleaned_by: &Address,
-    cleaned_count: u32,
-    total_refunded: i128,
+    proposal_id: u64,
+    executor: &Address,
+    num_actions: u32,
 ) {
     env.events().publish(
-        (Symbol::new(env, "batch_cleanup_completed"),),
-        (cleaned_by.clone(), cleaned_count, total_refunded),
+        (Symbol::new(env, "xvault_exec_start"), proposal_id),
+        (executor.clone(), num_actions),
     );
 }
 
-/// Emit when expiration configuration is updated
-pub fn emit_expiration_config_updated(env: &Env, admin: &Address) {
+/// Emit when a single cross-vault action is executed
+pub fn emit_cross_vault_action_executed(
+    env: &Env,
+    proposal_id: u64,
+    action_index: u32,
+    vault_address: &Address,
+    amount: i128,
+) {
+    env.events().publish(
+        (Symbol::new(env, "xvault_action"), proposal_id),
+        (action_index, vault_address.clone(), amount),
+    );
+}
+
+/// Emit when all cross-vault actions complete successfully
+pub fn emit_cross_vault_executed(
+    env: &Env,
+    proposal_id: u64,
+    executor: &Address,
+    num_actions: u32,
+) {
+    env.events().publish(
+        (Symbol::new(env, "xvault_executed"), proposal_id),
+        (executor.clone(), num_actions),
+    );
+}
+
+/// Emit when a participant vault receives and executes a cross-vault action
+pub fn emit_cross_vault_action_received(
+    env: &Env,
+    coordinator: &Address,
+    recipient: &Address,
+    token: &Address,
+    amount: i128,
+) {
+    env.events().publish(
+        (Symbol::new(env, "xvault_received"),),
+        (
+            coordinator.clone(),
+            recipient.clone(),
+            token.clone(),
+            amount,
+        ),
+    );
+}
+
+/// Emit when cross-vault configuration is updated
+pub fn emit_cross_vault_config_updated(env: &Env, admin: &Address) {
     env.events()
-        .publish((Symbol::new(env, "expiration_cfg_updated"),), admin.clone());
+        .publish((Symbol::new(env, "xvault_cfg_updated"),), admin.clone());
+}
+
+// ============================================================================
+// Dispute Resolution Events (feature/dispute-resolution)
+// ============================================================================
+
+/// Emit when a dispute is filed against a proposal
+pub fn emit_dispute_filed(env: &Env, dispute_id: u64, proposal_id: u64, disputer: &Address) {
+    env.events().publish(
+        (Symbol::new(env, "dispute_filed"), dispute_id),
+        (proposal_id, disputer.clone()),
+    );
+}
+
+/// Emit when a dispute is resolved by an arbitrator
+pub fn emit_dispute_resolved(
+    env: &Env,
+    dispute_id: u64,
+    proposal_id: u64,
+    arbitrator: &Address,
+    resolution: u32,
+) {
+    env.events().publish(
+        (Symbol::new(env, "dispute_resolved"), dispute_id),
+        (proposal_id, arbitrator.clone(), resolution),
+    );
+}
+
+/// Emit when arbitrator list is updated
+pub fn emit_arbitrators_updated(env: &Env, admin: &Address, count: u32) {
+    env.events().publish(
+        (Symbol::new(env, "arbitrators_updated"),),
+        (admin.clone(), count),
+    );
 }

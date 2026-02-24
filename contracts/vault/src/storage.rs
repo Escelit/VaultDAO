@@ -6,8 +6,9 @@ use soroban_sdk::{contracttype, Address, Env, String, Vec};
 
 use crate::errors::VaultError;
 use crate::types::{
-    Comment, Config, ExpirationRecord, GasConfig, InsuranceConfig, ListMode,
-    NotificationPreferences, Proposal, Reputation, RetryState, Role, VaultMetrics, VelocityConfig,
+    Comment, Config, CrossVaultConfig, CrossVaultProposal, Dispute, GasConfig, InsuranceConfig,
+    ListMode, NotificationPreferences, Proposal, Reputation, RetryState, Role, VaultMetrics,
+    VelocityConfig,
 };
 
 /// Storage key definitions
@@ -72,10 +73,18 @@ pub enum DataKey {
     Metrics,
     /// Retry state for a proposal -> RetryState
     RetryState(u64),
-    /// Expiration record for a cleaned up proposal -> ExpirationRecord
-    ExpirationRecord(u64),
-    /// List of all expired proposal IDs -> Vec<u64>
-    ExpirationHistory,
+    /// Cross-vault proposal by ID -> CrossVaultProposal
+    CrossVaultProposal(u64),
+    /// Cross-vault configuration -> CrossVaultConfig
+    CrossVaultConfig,
+    /// Dispute by ID -> Dispute
+    Dispute(u64),
+    /// Dispute ID for a proposal -> u64
+    ProposalDispute(u64),
+    /// Next dispute ID counter -> u64
+    NextDisputeId,
+    /// Arbitrator addresses -> Vec<Address>
+    Arbitrators,
 }
 
 /// TTL constants (in ledgers, ~5 seconds each)
@@ -745,40 +754,87 @@ pub fn set_retry_state(env: &Env, proposal_id: u64, state: &RetryState) {
 }
 
 // ============================================================================
-// Proposal Expiration (Issue: feature/proposal-expiration)
+// Cross-Vault Coordination (Issue: feature/cross-vault-coordination)
 // ============================================================================
 
-pub fn get_expiration_record(env: &Env, proposal_id: u64) -> Option<ExpirationRecord> {
-    env.storage()
-        .persistent()
-        .get(&DataKey::ExpirationRecord(proposal_id))
+pub fn get_cross_vault_config(env: &Env) -> Option<CrossVaultConfig> {
+    env.storage().instance().get(&DataKey::CrossVaultConfig)
 }
 
-pub fn set_expiration_record(env: &Env, proposal_id: u64, record: &ExpirationRecord) {
-    let key = DataKey::ExpirationRecord(proposal_id);
-    env.storage().persistent().set(&key, record);
+pub fn set_cross_vault_config(env: &Env, config: &CrossVaultConfig) {
     env.storage()
-        .persistent()
-        .extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL);
+        .instance()
+        .set(&DataKey::CrossVaultConfig, config);
 }
 
-pub fn get_expiration_history(env: &Env) -> Vec<u64> {
+pub fn get_cross_vault_proposal(env: &Env, proposal_id: u64) -> Option<CrossVaultProposal> {
     env.storage()
         .persistent()
-        .get(&DataKey::ExpirationHistory)
-        .unwrap_or(Vec::new(env))
+        .get(&DataKey::CrossVaultProposal(proposal_id))
 }
 
-pub fn set_expiration_history(env: &Env, history: &Vec<u64>) {
-    let key = DataKey::ExpirationHistory;
-    env.storage().persistent().set(&key, history);
+pub fn set_cross_vault_proposal(env: &Env, proposal_id: u64, proposal: &CrossVaultProposal) {
+    let key = DataKey::CrossVaultProposal(proposal_id);
+    env.storage().persistent().set(&key, proposal);
     env.storage()
         .persistent()
-        .extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL);
+        .extend_ttl(&key, PROPOSAL_TTL / 2, PROPOSAL_TTL);
 }
 
-pub fn remove_proposal(env: &Env, proposal_id: u64) {
+// ============================================================================
+// Dispute Resolution (Issue: feature/dispute-resolution)
+// ============================================================================
+
+pub fn get_arbitrators(env: &Env) -> Vec<Address> {
+    env.storage()
+        .instance()
+        .get(&DataKey::Arbitrators)
+        .unwrap_or_else(|| Vec::new(env))
+}
+
+pub fn set_arbitrators(env: &Env, arbitrators: &Vec<Address>) {
+    env.storage()
+        .instance()
+        .set(&DataKey::Arbitrators, arbitrators);
+}
+
+pub fn get_next_dispute_id(env: &Env) -> u64 {
+    env.storage()
+        .instance()
+        .get(&DataKey::NextDisputeId)
+        .unwrap_or(1)
+}
+
+pub fn increment_dispute_id(env: &Env) -> u64 {
+    let id = get_next_dispute_id(env);
+    env.storage()
+        .instance()
+        .set(&DataKey::NextDisputeId, &(id + 1));
+    id
+}
+
+pub fn get_dispute(env: &Env, id: u64) -> Option<Dispute> {
+    env.storage().persistent().get(&DataKey::Dispute(id))
+}
+
+pub fn set_dispute(env: &Env, dispute: &Dispute) {
+    let key = DataKey::Dispute(dispute.id);
+    env.storage().persistent().set(&key, dispute);
     env.storage()
         .persistent()
-        .remove(&DataKey::Proposal(proposal_id));
+        .extend_ttl(&key, PROPOSAL_TTL / 2, PROPOSAL_TTL);
+}
+
+pub fn get_proposal_dispute(env: &Env, proposal_id: u64) -> Option<u64> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::ProposalDispute(proposal_id))
+}
+
+pub fn set_proposal_dispute(env: &Env, proposal_id: u64, dispute_id: u64) {
+    let key = DataKey::ProposalDispute(proposal_id);
+    env.storage().persistent().set(&key, &dispute_id);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, PROPOSAL_TTL / 2, PROPOSAL_TTL);
 }
