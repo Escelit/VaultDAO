@@ -3984,13 +3984,13 @@ fn test_get_executable_proposals_respects_dependencies() {
     client.approve_proposal(&admin, &second_id);
 
     let executable_before = client.get_executable_proposals();
-    assert!(executable_before.contains(&first_id));
-    assert!(!executable_before.contains(&second_id));
+    assert!(executable_before.contains(first_id));
+    assert!(!executable_before.contains(second_id));
 
     client.execute_proposal(&admin, &first_id);
 
     let executable_after = client.get_executable_proposals();
-    assert!(executable_after.contains(&second_id));
+    assert!(executable_after.contains(second_id));
 }
 
 #[test]

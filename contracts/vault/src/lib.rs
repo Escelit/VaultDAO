@@ -2290,7 +2290,7 @@ impl VaultDAO {
             if dependency_id == proposal_id {
                 return Err(VaultError::InvalidAmount);
             }
-            if seen.contains(&dependency_id) {
+            if seen.contains(dependency_id) {
                 return Err(VaultError::InvalidAmount);
             }
             if !storage::proposal_exists(env, dependency_id) {
@@ -2343,7 +2343,7 @@ impl VaultDAO {
         if from_id == target_id {
             return Ok(true);
         }
-        if visited.contains(&from_id) {
+        if visited.contains(from_id) {
             return Ok(false);
         }
 
