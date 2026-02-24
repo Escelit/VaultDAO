@@ -31,8 +31,32 @@ use types::{
 #[contract]
 pub struct VaultDAO;
 
-/// Proposal expiration: ~7 days in ledgers (5 seconds per ledger)
+/// Proposal expiration: ~7 days in ledgers (5 seconds per ledger) - DEPRECATED, use ExpirationConfig
+#[allow(dead_code)]
 const PROPOSAL_EXPIRY_LEDGERS: u64 = 120_960;
+
+/// Calculate expiration ledger based on priority and configuration
+fn calculate_expiration_ledger(
+    config: &Config,
+    priority: &Priority,
+    current_ledger: u64,
+) -> u64 {
+    if !config.expiration_config.enabled {
+        return 0; // No expiration
+    }
+
+    let period = match priority {
+        Priority::Critical => config.expiration_config.critical_priority_period,
+        Priority::High => config.expiration_config.high_priority_period,
+        Priority::Normal | Priority::Low => config.expiration_config.default_period,
+    };
+
+    if period == 0 {
+        0 // No expiration
+    } else {
+        current_ledger + period
+    }
+}
 
 /// Maximum proposals that can be batch-executed in one call (gas limit)
 const MAX_BATCH_SIZE: u32 = 10;
@@ -99,6 +123,7 @@ impl VaultDAO {
             threshold_strategy: config.threshold_strategy,
             default_voting_deadline: config.default_voting_deadline,
             retry_config: config.retry_config,
+            expiration_config: config.expiration_config,
         };
 
         // Store state
@@ -253,7 +278,7 @@ impl VaultDAO {
             conditions: conditions.clone(),
             condition_logic,
             created_at: current_ledger,
-            expires_at: current_ledger + PROPOSAL_EXPIRY_LEDGERS,
+            expires_at: calculate_expiration_ledger(&config, &priority, current_ledger),
             unlock_ledger: 0,
             insurance_amount: actual_insurance,
             gas_limit: proposal_gas_limit,
@@ -458,7 +483,7 @@ impl VaultDAO {
                 conditions: conditions.clone(),
                 condition_logic: condition_logic.clone(),
                 created_at: current_ledger,
-                expires_at: current_ledger + PROPOSAL_EXPIRY_LEDGERS,
+                expires_at: calculate_expiration_ledger(&config, &priority, current_ledger),
                 unlock_ledger: 0,
                 insurance_amount: insurance_per_proposal,
                 gas_limit: proposal_gas_limit,
@@ -552,6 +577,8 @@ impl VaultDAO {
         if current_ledger > proposal.expires_at {
             proposal.status = ProposalStatus::Expired;
             storage::set_proposal(&env, &proposal);
+            storage::metrics_on_expiry(&env);
+            events::emit_proposal_expired(&env, proposal_id, proposal.expires_at);
             return Err(VaultError::ProposalExpired);
         }
 
@@ -649,6 +676,7 @@ impl VaultDAO {
             proposal.status = ProposalStatus::Expired;
             storage::set_proposal(&env, &proposal);
             storage::metrics_on_expiry(&env);
+            events::emit_proposal_expired(&env, proposal_id, proposal.expires_at);
             return Err(VaultError::ProposalExpired);
         }
 
@@ -2231,7 +2259,7 @@ impl VaultDAO {
             conditions,
             condition_logic,
             created_at: current_ledger as u64,
-            expires_at: (current_ledger + PROPOSAL_EXPIRY_LEDGERS as u32) as u64,
+            expires_at: calculate_expiration_ledger(&config, &priority, current_ledger as u64),
             unlock_ledger: unlock_ledger as u64,
             insurance_amount,
             gas_limit: proposal_gas_limit,
@@ -2677,4 +2705,229 @@ impl VaultDAO {
 
         Ok(())
     }
+
+    // ========================================================================
+    // Proposal Expiration & Cleanup (feature/proposal-expiration)
+    // ========================================================================
+
+    /// Clean up a single expired proposal and reclaim storage.
+    ///
+    /// Proposals can only be cleaned up after they have expired AND the grace period has passed.
+    /// Insurance amounts (if any) are refunded to the proposer.
+    ///
+    /// # Arguments
+    /// * `cleaner` - Address initiating the cleanup (must authorize)
+    /// * `proposal_id` - ID of the expired proposal to clean up
+    ///
+    /// # Returns
+    /// Ok(()) if cleanup successful, or error if proposal not eligible
+    pub fn cleanup_expired_proposal(
+        env: Env,
+        cleaner: Address,
+        proposal_id: u64,
+    ) -> Result<(), VaultError> {
+        cleaner.require_auth();
+
+        let config = storage::get_config(&env)?;
+        
+        if !config.expiration_config.enabled {
+            return Err(VaultError::RetryNotEnabled); // Reusing for ExpirationDisabled
+        }
+
+        let proposal = storage::get_proposal(&env, proposal_id)?;
+        let current_ledger = env.ledger().sequence() as u64;
+
+        // Check if proposal is expired
+        if proposal.status != types::ProposalStatus::Expired {
+            return Err(VaultError::ProposalNotPending); // Reusing for ProposalNotExpired
+        }
+
+        // Check if grace period has passed
+        let grace_end = proposal.expires_at + config.expiration_config.grace_period;
+        if current_ledger < grace_end {
+            return Err(VaultError::TimelockNotExpired); // Reusing for GracePeriodNotPassed
+        }
+
+        // Refund insurance if any
+        let refunded_insurance = proposal.insurance_amount;
+        if refunded_insurance > 0 {
+            token::transfer(&env, &proposal.token, &proposal.proposer, refunded_insurance);
+        }
+
+        // Create expiration record
+        let expiration_record = types::ExpirationRecord {
+            proposal_id,
+            expired_at: proposal.expires_at,
+            cleaned_up_at: current_ledger,
+            cleaned_by: cleaner.clone(),
+            refunded_insurance,
+        };
+
+        storage::set_expiration_record(&env, proposal_id, &expiration_record);
+
+        // Add to expiration history
+        let mut history = storage::get_expiration_history(&env);
+        history.push_back(proposal_id);
+        storage::set_expiration_history(&env, &history);
+
+        // Remove proposal from storage
+        storage::remove_proposal(&env, proposal_id);
+
+        // Emit events
+        events::emit_proposal_cleaned_up(&env, proposal_id, &cleaner, refunded_insurance);
+
+        Ok(())
+    }
+
+    /// Clean up multiple expired proposals in a single transaction.
+    ///
+    /// Processes up to `max_cleanup_batch_size` proposals. Skips proposals that
+    /// are not eligible for cleanup without failing the entire batch.
+    ///
+    /// # Arguments
+    /// * `cleaner` - Address initiating the cleanup (must authorize)
+    /// * `proposal_ids` - List of proposal IDs to attempt cleanup
+    ///
+    /// # Returns
+    /// Tuple of (cleaned_count, total_refunded_insurance)
+    pub fn batch_cleanup_expired_proposals(
+        env: Env,
+        cleaner: Address,
+        proposal_ids: Vec<u64>,
+    ) -> Result<(u32, i128), VaultError> {
+        cleaner.require_auth();
+
+        let config = storage::get_config(&env)?;
+        
+        if !config.expiration_config.enabled {
+            return Err(VaultError::RetryNotEnabled); // Reusing for ExpirationDisabled
+        }
+
+        let current_ledger = env.ledger().sequence() as u64;
+        let max_batch = config.expiration_config.max_cleanup_batch_size;
+        
+        let mut cleaned_count: u32 = 0;
+        let mut total_refunded: i128 = 0;
+
+        for (idx, proposal_id) in proposal_ids.iter().enumerate() {
+            // Respect batch size limit
+            if idx >= max_batch as usize {
+                break;
+            }
+
+            // Try to clean up this proposal (skip if not eligible)
+            if let Ok(proposal) = storage::get_proposal(&env, proposal_id) {
+                // Check eligibility
+                if proposal.status == types::ProposalStatus::Expired {
+                    let grace_end = proposal.expires_at + config.expiration_config.grace_period;
+                    
+                    if current_ledger >= grace_end {
+                        // Refund insurance
+                        let refunded = proposal.insurance_amount;
+                        if refunded > 0 {
+                            token::transfer(&env, &proposal.token, &proposal.proposer, refunded);
+                            total_refunded += refunded;
+                        }
+
+                        // Create expiration record
+                        let expiration_record = types::ExpirationRecord {
+                            proposal_id,
+                            expired_at: proposal.expires_at,
+                            cleaned_up_at: current_ledger,
+                            cleaned_by: cleaner.clone(),
+                            refunded_insurance: refunded,
+                        };
+
+                        storage::set_expiration_record(&env, proposal_id, &expiration_record);
+
+                        // Add to history
+                        let mut history = storage::get_expiration_history(&env);
+                        history.push_back(proposal_id);
+                        storage::set_expiration_history(&env, &history);
+
+                        // Remove proposal
+                        storage::remove_proposal(&env, proposal_id);
+
+                        cleaned_count += 1;
+
+                        // Emit individual cleanup event
+                        events::emit_proposal_cleaned_up(&env, proposal_id, &cleaner, refunded);
+                    }
+                }
+            }
+        }
+
+        // Emit batch completion event
+        events::emit_batch_cleanup_completed(&env, &cleaner, cleaned_count, total_refunded);
+
+        Ok((cleaned_count, total_refunded))
+    }
+
+    /// Update expiration configuration (admin only).
+    ///
+    /// # Arguments
+    /// * `admin` - Admin address (must authorize)
+    /// * `expiration_config` - New expiration configuration
+    pub fn set_expiration_config(
+        env: Env,
+        admin: Address,
+        expiration_config: types::ExpirationConfig,
+    ) -> Result<(), VaultError> {
+        admin.require_auth();
+
+        let role = storage::get_role(&env, &admin);
+        if role != Role::Admin {
+            return Err(VaultError::Unauthorized);
+        }
+
+        let mut config = storage::get_config(&env)?;
+        config.expiration_config = expiration_config;
+        storage::set_config(&env, &config);
+
+        events::emit_expiration_config_updated(&env, &admin);
+
+        Ok(())
+    }
+
+    /// Get expiration configuration.
+    pub fn get_expiration_config(env: Env) -> types::ExpirationConfig {
+        storage::get_config(&env)
+            .map(|c| c.expiration_config)
+            .unwrap_or_else(|_| types::ExpirationConfig::default())
+    }
+
+    /// Get expiration record for a cleaned up proposal.
+    pub fn get_expiration_record(
+        env: Env,
+        proposal_id: u64,
+    ) -> Option<types::ExpirationRecord> {
+        storage::get_expiration_record(&env, proposal_id)
+    }
+
+    /// Get list of all expired proposal IDs that have been cleaned up.
+    pub fn get_expiration_history(env: Env) -> Vec<u64> {
+        storage::get_expiration_history(&env)
+    }
+
+    /// Check if a proposal is eligible for cleanup.
+    ///
+    /// Returns true if the proposal is expired and grace period has passed.
+    pub fn is_eligible_for_cleanup(env: Env, proposal_id: u64) -> Result<bool, VaultError> {
+        let config = storage::get_config(&env)?;
+        
+        if !config.expiration_config.enabled {
+            return Ok(false);
+        }
+
+        let proposal = storage::get_proposal(&env, proposal_id)?;
+        let current_ledger = env.ledger().sequence() as u64;
+
+        if proposal.status != types::ProposalStatus::Expired {
+            return Ok(false);
+        }
+
+        let grace_end = proposal.expires_at + config.expiration_config.grace_period;
+        Ok(current_ledger >= grace_end)
+    }
 }
+

@@ -32,6 +32,8 @@ pub struct InitConfig {
     pub default_voting_deadline: u64,
     /// Retry configuration for failed executions
     pub retry_config: RetryConfig,
+    /// Expiration configuration for proposals
+    pub expiration_config: ExpirationConfig,
 }
 
 /// Vault configuration
@@ -62,6 +64,8 @@ pub struct Config {
     pub default_voting_deadline: u64,
     /// Retry configuration for failed executions
     pub retry_config: RetryConfig,
+    /// Expiration configuration for proposals
+    pub expiration_config: ExpirationConfig,
 }
 
 /// Audit record for a cancelled proposal
@@ -604,4 +608,55 @@ pub struct RetryState {
     pub next_retry_ledger: u64,
     /// Ledger of the last retry attempt
     pub last_retry_ledger: u64,
+}
+
+// ============================================================================
+// Proposal Expiration (Issue: feature/proposal-expiration)
+// ============================================================================
+
+/// Configuration for automatic proposal expiration and cleanup
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct ExpirationConfig {
+    /// Whether expiration is enabled
+    pub enabled: bool,
+    /// Default expiration period in ledgers for standard proposals (0 = no expiration)
+    pub default_period: u64,
+    /// Expiration period for high-priority proposals
+    pub high_priority_period: u64,
+    /// Expiration period for critical proposals
+    pub critical_priority_period: u64,
+    /// Grace period in ledgers before expired proposals can be cleaned up
+    pub grace_period: u64,
+    /// Maximum number of proposals to clean up in a single batch operation
+    pub max_cleanup_batch_size: u32,
+}
+
+impl ExpirationConfig {
+    pub fn default() -> Self {
+        ExpirationConfig {
+            enabled: true,
+            default_period: 172_800,      // ~10 days (5 sec/ledger)
+            high_priority_period: 86_400,  // ~5 days
+            critical_priority_period: 43_200, // ~2.5 days
+            grace_period: 17_280,          // ~1 day
+            max_cleanup_batch_size: 50,
+        }
+    }
+}
+
+/// Record of a cleaned up expired proposal
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct ExpirationRecord {
+    /// Proposal ID that was cleaned up
+    pub proposal_id: u64,
+    /// Ledger when proposal expired
+    pub expired_at: u64,
+    /// Ledger when proposal was cleaned up
+    pub cleaned_up_at: u64,
+    /// Address that initiated the cleanup
+    pub cleaned_by: Address,
+    /// Amount of insurance refunded (if any)
+    pub refunded_insurance: i128,
 }

@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::types::{
-    DexConfig, RetryConfig, SwapProposal, TimeBasedThreshold, TransferDetails, VelocityConfig,
+    DexConfig, ExpirationConfig, RetryConfig, SwapProposal, TimeBasedThreshold, TransferDetails, VelocityConfig,
 };
 use crate::{InitConfig, VaultDAO, VaultDAOClient};
 use soroban_sdk::{
@@ -41,6 +41,7 @@ fn default_init_config(
             max_retries: 0,
             initial_backoff_ledgers: 0,
         },
+        expiration_config: ExpirationConfig::default(),
     }
 }
 
@@ -3075,4 +3076,661 @@ fn test_retry_succeeds_after_balance_funded() {
     // Retry should succeed now
     let result = client.try_execute_proposal(&admin, &proposal_id);
     assert!(result.is_ok(), "Retry should succeed after funding");
+}
+
+// ============================================================================
+// Proposal Expiration Tests (feature/proposal-expiration)
+// ============================================================================
+
+#[test]
+fn test_proposal_expires_after_period() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let signer = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let token = Address::generate(&env);
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    signers.push_back(signer.clone());
+
+    // Initialize with short expiration period
+    let config = InitConfig {
+        signers,
+        threshold: 1,
+        quorum: 0,
+        spending_limit: 1000,
+        daily_limit: 5000,
+        weekly_limit: 10000,
+        timelock_threshold: 500,
+        timelock_delay: 100,
+        velocity_limit: VelocityConfig {
+            limit: 100,
+            window: 3600,
+        },
+        threshold_strategy: ThresholdStrategy::Fixed,
+        default_voting_deadline: 0,
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
+        expiration_config: ExpirationConfig {
+            enabled: true,
+            default_period: 100, // 100 ledgers
+            high_priority_period: 50,
+            critical_priority_period: 25,
+            grace_period: 10,
+            max_cleanup_batch_size: 50,
+        },
+    };
+    client.initialize(&admin, &config);
+    client.set_role(&admin, &signer, &Role::Treasurer);
+
+    // Create proposal
+    let proposal_id = client.propose_transfer(
+        &signer,
+        &recipient,
+        &token,
+        &100,
+        &Symbol::new(&env, "test"),
+        &Priority::Normal,
+        &Vec::new(&env),
+        &ConditionLogic::And,
+        &0,
+    );
+
+    // Advance ledger past expiration
+    env.ledger().with_mut(|li| {
+        li.sequence_number += 101;
+    });
+
+    // Try to approve - should fail with expired
+    let result = client.try_approve_proposal(&signer, &proposal_id);
+    assert_eq!(result, Err(Ok(VaultError::ProposalExpired)));
+
+    // Check proposal status
+    let proposal = client.get_proposal(&proposal_id);
+    assert_eq!(proposal.status, ProposalStatus::Expired);
+}
+
+#[test]
+fn test_priority_affects_expiration_period() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let signer = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let token = Address::generate(&env);
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    signers.push_back(signer.clone());
+
+    let config = InitConfig {
+        signers,
+        threshold: 1,
+        quorum: 0,
+        spending_limit: 1000,
+        daily_limit: 5000,
+        weekly_limit: 10000,
+        timelock_threshold: 500,
+        timelock_delay: 100,
+        velocity_limit: VelocityConfig {
+            limit: 100,
+            window: 3600,
+        },
+        threshold_strategy: ThresholdStrategy::Fixed,
+        default_voting_deadline: 0,
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
+        expiration_config: ExpirationConfig {
+            enabled: true,
+            default_period: 100,
+            high_priority_period: 50,
+            critical_priority_period: 25,
+            grace_period: 10,
+            max_cleanup_batch_size: 50,
+        },
+    };
+    client.initialize(&admin, &config);
+    client.set_role(&admin, &signer, &Role::Treasurer);
+
+    let current_ledger = env.ledger().sequence() as u64;
+
+    // Create normal priority proposal
+    let normal_id = client.propose_transfer(
+        &signer,
+        &recipient,
+        &token,
+        &100,
+        &Symbol::new(&env, "normal"),
+        &Priority::Normal,
+        &Vec::new(&env),
+        &ConditionLogic::And,
+        &0,
+    );
+
+    // Create high priority proposal
+    let high_id = client.propose_transfer(
+        &signer,
+        &recipient,
+        &token,
+        &100,
+        &Symbol::new(&env, "high"),
+        &Priority::High,
+        &Vec::new(&env),
+        &ConditionLogic::And,
+        &0,
+    );
+
+    // Create critical priority proposal
+    let critical_id = client.propose_transfer(
+        &signer,
+        &recipient,
+        &token,
+        &100,
+        &Symbol::new(&env, "critical"),
+        &Priority::Critical,
+        &Vec::new(&env),
+        &ConditionLogic::And,
+        &0,
+    );
+
+    // Check expiration times
+    let normal_proposal = client.get_proposal(&normal_id);
+    let high_proposal = client.get_proposal(&high_id);
+    let critical_proposal = client.get_proposal(&critical_id);
+
+    assert_eq!(normal_proposal.expires_at, current_ledger + 100);
+    assert_eq!(high_proposal.expires_at, current_ledger + 50);
+    assert_eq!(critical_proposal.expires_at, current_ledger + 25);
+}
+
+#[test]
+fn test_cleanup_expired_proposal() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let signer = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let token = Address::generate(&env);
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    signers.push_back(signer.clone());
+
+    let config = InitConfig {
+        signers,
+        threshold: 1,
+        quorum: 0,
+        spending_limit: 1000,
+        daily_limit: 5000,
+        weekly_limit: 10000,
+        timelock_threshold: 500,
+        timelock_delay: 100,
+        velocity_limit: VelocityConfig {
+            limit: 100,
+            window: 3600,
+        },
+        threshold_strategy: ThresholdStrategy::Fixed,
+        default_voting_deadline: 0,
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
+        expiration_config: ExpirationConfig {
+            enabled: true,
+            default_period: 100,
+            high_priority_period: 50,
+            critical_priority_period: 25,
+            grace_period: 10,
+            max_cleanup_batch_size: 50,
+        },
+    };
+    client.initialize(&admin, &config);
+    client.set_role(&admin, &signer, &Role::Treasurer);
+
+    // Create proposal
+    let proposal_id = client.propose_transfer(
+        &signer,
+        &recipient,
+        &token,
+        &100,
+        &Symbol::new(&env, "test"),
+        &Priority::Normal,
+        &Vec::new(&env),
+        &ConditionLogic::And,
+        &0,
+    );
+
+    // Advance past expiration
+    env.ledger().with_mut(|li| {
+        li.sequence_number += 101;
+    });
+
+    // Mark as expired by trying to approve
+    let _ = client.try_approve_proposal(&signer, &proposal_id);
+
+    // Try to cleanup before grace period - should fail
+    let result = client.try_cleanup_expired_proposal(&admin, &proposal_id);
+    assert_eq!(result, Err(Ok(VaultError::TimelockNotExpired))); // Reused for GracePeriodNotPassed
+
+    // Advance past grace period
+    env.ledger().with_mut(|li| {
+        li.sequence_number += 10;
+    });
+
+    // Now cleanup should succeed
+    client.cleanup_expired_proposal(&admin, &proposal_id);
+
+    // Verify expiration record exists
+    let record = client.get_expiration_record(&proposal_id);
+    assert!(record.is_some());
+    let record = record.unwrap();
+    assert_eq!(record.proposal_id, proposal_id);
+    assert_eq!(record.cleaned_by, admin);
+
+    // Verify proposal is removed
+    let result = client.try_get_proposal(&proposal_id);
+    assert_eq!(result, Err(Ok(VaultError::ProposalNotFound)));
+}
+
+#[test]
+fn test_batch_cleanup_expired_proposals() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let signer = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let token = Address::generate(&env);
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    signers.push_back(signer.clone());
+
+    let config = InitConfig {
+        signers,
+        threshold: 1,
+        quorum: 0,
+        spending_limit: 10000,
+        daily_limit: 50000,
+        weekly_limit: 100000,
+        timelock_threshold: 500,
+        timelock_delay: 100,
+        velocity_limit: VelocityConfig {
+            limit: 100,
+            window: 3600,
+        },
+        threshold_strategy: ThresholdStrategy::Fixed,
+        default_voting_deadline: 0,
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
+        expiration_config: ExpirationConfig {
+            enabled: true,
+            default_period: 100,
+            high_priority_period: 50,
+            critical_priority_period: 25,
+            grace_period: 10,
+            max_cleanup_batch_size: 50,
+        },
+    };
+    client.initialize(&admin, &config);
+    client.set_role(&admin, &signer, &Role::Treasurer);
+
+    // Create multiple proposals
+    let mut proposal_ids = Vec::new(&env);
+    for i in 0..5 {
+        let id = client.propose_transfer(
+            &signer,
+            &recipient,
+            &token,
+            &100,
+            &Symbol::new(&env, "test"),
+            &Priority::Normal,
+            &Vec::new(&env),
+            &ConditionLogic::And,
+            &0,
+        );
+        proposal_ids.push_back(id);
+    }
+
+    // Advance past expiration and grace period
+    env.ledger().with_mut(|li| {
+        li.sequence_number += 111;
+    });
+
+    // Mark all as expired
+    for i in 0..proposal_ids.len() {
+        let id = proposal_ids.get(i).unwrap();
+        let _ = client.try_approve_proposal(&signer, &id);
+    }
+
+    // Batch cleanup
+    let (cleaned_count, total_refunded) = client.batch_cleanup_expired_proposals(&admin, &proposal_ids);
+    assert_eq!(cleaned_count, 5);
+    assert_eq!(total_refunded, 0); // No insurance
+
+    // Verify all are cleaned up
+    for i in 0..proposal_ids.len() {
+        let id = proposal_ids.get(i).unwrap();
+        let result = client.try_get_proposal(&id);
+        assert_eq!(result, Err(Ok(VaultError::ProposalNotFound)));
+    }
+}
+
+#[test]
+fn test_grace_period_prevents_immediate_cleanup() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let signer = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let token = Address::generate(&env);
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    signers.push_back(signer.clone());
+
+    let config = InitConfig {
+        signers,
+        threshold: 1,
+        quorum: 0,
+        spending_limit: 1000,
+        daily_limit: 5000,
+        weekly_limit: 10000,
+        timelock_threshold: 500,
+        timelock_delay: 100,
+        velocity_limit: VelocityConfig {
+            limit: 100,
+            window: 3600,
+        },
+        threshold_strategy: ThresholdStrategy::Fixed,
+        default_voting_deadline: 0,
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
+        expiration_config: ExpirationConfig {
+            enabled: true,
+            default_period: 50,
+            high_priority_period: 25,
+            critical_priority_period: 10,
+            grace_period: 20, // 20 ledger grace period
+            max_cleanup_batch_size: 50,
+        },
+    };
+    client.initialize(&admin, &config);
+    client.set_role(&admin, &signer, &Role::Treasurer);
+
+    let proposal_id = client.propose_transfer(
+        &signer,
+        &recipient,
+        &token,
+        &100,
+        &Symbol::new(&env, "test"),
+        &Priority::Normal,
+        &Vec::new(&env),
+        &ConditionLogic::And,
+        &0,
+    );
+
+    // Advance to just after expiration
+    env.ledger().with_mut(|li| {
+        li.sequence_number += 51;
+    });
+
+    // Mark as expired
+    let _ = client.try_approve_proposal(&signer, &proposal_id);
+
+    // Try cleanup - should fail (grace period not passed)
+    let result = client.try_cleanup_expired_proposal(&admin, &proposal_id);
+    assert_eq!(result, Err(Ok(VaultError::TimelockNotExpired))); // Reused for GracePeriodNotPassed
+
+    // Advance to middle of grace period
+    env.ledger().with_mut(|li| {
+        li.sequence_number += 10;
+    });
+
+    // Still should fail
+    let result = client.try_cleanup_expired_proposal(&admin, &proposal_id);
+    assert_eq!(result, Err(Ok(VaultError::TimelockNotExpired))); // Reused for GracePeriodNotPassed
+
+    // Advance past grace period
+    env.ledger().with_mut(|li| {
+        li.sequence_number += 10;
+    });
+
+    // Now should succeed
+    client.cleanup_expired_proposal(&admin, &proposal_id);
+}
+
+#[test]
+fn test_expiration_disabled() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let signer = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let token = Address::generate(&env);
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    signers.push_back(signer.clone());
+
+    let config = InitConfig {
+        signers,
+        threshold: 1,
+        quorum: 0,
+        spending_limit: 1000,
+        daily_limit: 5000,
+        weekly_limit: 10000,
+        timelock_threshold: 500,
+        timelock_delay: 100,
+        velocity_limit: VelocityConfig {
+            limit: 100,
+            window: 3600,
+        },
+        threshold_strategy: ThresholdStrategy::Fixed,
+        default_voting_deadline: 0,
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
+        expiration_config: ExpirationConfig {
+            enabled: false, // Disabled
+            default_period: 100,
+            high_priority_period: 50,
+            critical_priority_period: 25,
+            grace_period: 10,
+            max_cleanup_batch_size: 50,
+        },
+    };
+    client.initialize(&admin, &config);
+    client.set_role(&admin, &signer, &Role::Treasurer);
+
+    let proposal_id = client.propose_transfer(
+        &signer,
+        &recipient,
+        &token,
+        &100,
+        &Symbol::new(&env, "test"),
+        &Priority::Normal,
+        &Vec::new(&env),
+        &ConditionLogic::And,
+        &0,
+    );
+
+    // Check that expires_at is 0 (no expiration)
+    let proposal = client.get_proposal(&proposal_id);
+    assert_eq!(proposal.expires_at, 0);
+
+    // Advance ledger far into the future
+    env.ledger().with_mut(|li| {
+        li.sequence_number += 10000;
+    });
+
+    // Proposal should still be approvable
+    client.approve_proposal(&signer, &proposal_id);
+
+    let proposal = client.get_proposal(&proposal_id);
+    assert_eq!(proposal.status, ProposalStatus::Approved);
+}
+
+#[test]
+fn test_update_expiration_config() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let signer = Address::generate(&env);
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    signers.push_back(signer.clone());
+
+    let config = default_init_config(&env, signers, 1);
+    client.initialize(&admin, &config);
+
+    // Update expiration config
+    let new_expiration_config = ExpirationConfig {
+        enabled: true,
+        default_period: 200,
+        high_priority_period: 100,
+        critical_priority_period: 50,
+        grace_period: 20,
+        max_cleanup_batch_size: 100,
+    };
+
+    client.set_expiration_config(&admin, &new_expiration_config);
+
+    // Verify update
+    let retrieved_config = client.get_expiration_config();
+    assert_eq!(retrieved_config.enabled, true);
+    assert_eq!(retrieved_config.default_period, 200);
+    assert_eq!(retrieved_config.high_priority_period, 100);
+    assert_eq!(retrieved_config.critical_priority_period, 50);
+    assert_eq!(retrieved_config.grace_period, 20);
+    assert_eq!(retrieved_config.max_cleanup_batch_size, 100);
+}
+
+#[test]
+fn test_is_eligible_for_cleanup() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let signer = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let token = Address::generate(&env);
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    signers.push_back(signer.clone());
+
+    let config = InitConfig {
+        signers,
+        threshold: 1,
+        quorum: 0,
+        spending_limit: 1000,
+        daily_limit: 5000,
+        weekly_limit: 10000,
+        timelock_threshold: 500,
+        timelock_delay: 100,
+        velocity_limit: VelocityConfig {
+            limit: 100,
+            window: 3600,
+        },
+        threshold_strategy: ThresholdStrategy::Fixed,
+        default_voting_deadline: 0,
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
+        expiration_config: ExpirationConfig {
+            enabled: true,
+            default_period: 100,
+            high_priority_period: 50,
+            critical_priority_period: 25,
+            grace_period: 10,
+            max_cleanup_batch_size: 50,
+        },
+    };
+    client.initialize(&admin, &config);
+    client.set_role(&admin, &signer, &Role::Treasurer);
+
+    let proposal_id = client.propose_transfer(
+        &signer,
+        &recipient,
+        &token,
+        &100,
+        &Symbol::new(&env, "test"),
+        &Priority::Normal,
+        &Vec::new(&env),
+        &ConditionLogic::And,
+        &0,
+    );
+
+    // Not eligible yet (not expired)
+    assert_eq!(client.is_eligible_for_cleanup(&proposal_id), false);
+
+    // Advance past expiration
+    env.ledger().with_mut(|li| {
+        li.sequence_number += 101;
+    });
+
+    // Mark as expired
+    let _ = client.try_approve_proposal(&signer, &proposal_id);
+
+    // Still not eligible (grace period)
+    assert_eq!(client.is_eligible_for_cleanup(&proposal_id), false);
+
+    // Advance past grace period
+    env.ledger().with_mut(|li| {
+        li.sequence_number += 10;
+    });
+
+    // Now eligible
+    assert_eq!(client.is_eligible_for_cleanup(&proposal_id), true);
 }

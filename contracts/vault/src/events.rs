@@ -401,3 +401,47 @@ pub fn emit_retries_exhausted(env: &Env, proposal_id: u64, total_attempts: u32) 
         total_attempts,
     );
 }
+
+// ============================================================================
+// Expiration Events (feature/proposal-expiration)
+// ============================================================================
+
+/// Emit when a proposal expires
+pub fn emit_proposal_expired(env: &Env, proposal_id: u64, expired_at: u64) {
+    env.events().publish(
+        (Symbol::new(env, "proposal_expired"), proposal_id),
+        expired_at,
+    );
+}
+
+/// Emit when an expired proposal is cleaned up
+pub fn emit_proposal_cleaned_up(
+    env: &Env,
+    proposal_id: u64,
+    cleaned_by: &Address,
+    refunded_insurance: i128,
+) {
+    env.events().publish(
+        (Symbol::new(env, "proposal_cleaned_up"), proposal_id),
+        (cleaned_by.clone(), refunded_insurance),
+    );
+}
+
+/// Emit when a batch cleanup operation completes
+pub fn emit_batch_cleanup_completed(
+    env: &Env,
+    cleaned_by: &Address,
+    cleaned_count: u32,
+    total_refunded: i128,
+) {
+    env.events().publish(
+        (Symbol::new(env, "batch_cleanup_completed"),),
+        (cleaned_by.clone(), cleaned_count, total_refunded),
+    );
+}
+
+/// Emit when expiration configuration is updated
+pub fn emit_expiration_config_updated(env: &Env, admin: &Address) {
+    env.events()
+        .publish((Symbol::new(env, "expiration_cfg_updated"),), admin.clone());
+}

@@ -6,7 +6,7 @@ use soroban_sdk::{contracttype, Address, Env, String, Vec};
 
 use crate::errors::VaultError;
 use crate::types::{
-    Comment, Config, GasConfig, InsuranceConfig, ListMode, NotificationPreferences, Proposal,
+    Comment, Config, ExpirationRecord, GasConfig, InsuranceConfig, ListMode, NotificationPreferences, Proposal,
     Reputation, RetryState, Role, VaultMetrics, VelocityConfig,
 };
 
@@ -72,6 +72,10 @@ pub enum DataKey {
     Metrics,
     /// Retry state for a proposal -> RetryState
     RetryState(u64),
+    /// Expiration record for a cleaned up proposal -> ExpirationRecord
+    ExpirationRecord(u64),
+    /// List of all expired proposal IDs -> Vec<u64>
+    ExpirationHistory,
 }
 
 /// TTL constants (in ledgers, ~5 seconds each)
@@ -738,4 +742,43 @@ pub fn set_retry_state(env: &Env, proposal_id: u64, state: &RetryState) {
     env.storage()
         .persistent()
         .extend_ttl(&key, PROPOSAL_TTL / 2, PROPOSAL_TTL);
+}
+
+// ============================================================================
+// Proposal Expiration (Issue: feature/proposal-expiration)
+// ============================================================================
+
+pub fn get_expiration_record(env: &Env, proposal_id: u64) -> Option<ExpirationRecord> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::ExpirationRecord(proposal_id))
+}
+
+pub fn set_expiration_record(env: &Env, proposal_id: u64, record: &ExpirationRecord) {
+    let key = DataKey::ExpirationRecord(proposal_id);
+    env.storage().persistent().set(&key, record);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL);
+}
+
+pub fn get_expiration_history(env: &Env) -> Vec<u64> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::ExpirationHistory)
+        .unwrap_or(Vec::new(env))
+}
+
+pub fn set_expiration_history(env: &Env, history: &Vec<u64>) {
+    let key = DataKey::ExpirationHistory;
+    env.storage().persistent().set(&key, history);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL);
+}
+
+pub fn remove_proposal(env: &Env, proposal_id: u64) {
+    env.storage()
+        .persistent()
+        .remove(&DataKey::Proposal(proposal_id));
 }
