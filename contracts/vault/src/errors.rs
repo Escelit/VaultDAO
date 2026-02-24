@@ -90,4 +90,9 @@ pub enum VaultError {
 
     // Quorum runtime checks
     QuorumNotReached = 8,
+
+    // Template errors
+    TemplateNotFound = 210,
+    TemplateInactive = 211,
+    TemplateValidationFailed = 212,
 }
