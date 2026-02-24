@@ -4,10 +4,11 @@ import {
   clearExportHistory,
   type ExportHistoryItem,
 } from '../../utils/exportHistory';
-import { Download, Trash2, FileText, Shield } from 'lucide-react';
+import { Download, Trash2, FileText, Shield, Wifi } from 'lucide-react';
 import RecipientListManagement from '../../components/RecipientListManagement';
 import RoleManagement from '../../components/RoleManagement';
 import WalletComparison from '../../components/WalletComparison';
+import RealtimeSettings from '../../components/RealtimeSettings';
 
 /** Item with stored content for re-download (when ExportModal saves it) */
 interface ExportItemWithContent extends ExportHistoryItem {
@@ -172,8 +173,20 @@ const Settings: React.FC = () => {
         {showRecipientLists && <RecipientListManagement />}
       </div>
 
+      {/* Real-time Collaboration Settings */}
       <div className="bg-gray-800 rounded-xl border border-gray-700 p-6">
-        <p className="text-gray-400">Configuration options will appear here.</p>
+        <div className="flex items-center gap-3 mb-4">
+          <Wifi className="text-purple-400" size={24} />
+          <h3 className="text-lg font-semibold">Real-time Collaboration</h3>
+        </div>
+        <p className="text-gray-400 text-sm mb-6">
+          Configure real-time features including live updates, online users, and notifications.
+        </p>
+        <RealtimeSettings />
+      </div>
+
+      <div className="bg-gray-800 rounded-xl border border-gray-700 p-6">
+        <p className="text-gray-400">Additional configuration options will appear here.</p>
       </div>
     </div>
   );
