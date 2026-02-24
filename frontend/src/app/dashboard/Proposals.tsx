@@ -366,7 +366,7 @@ const Proposals: React.FC = () => {
 
                   <div onClick={() => setSelectedProposal(prop)} className="cursor-pointer">
                     <div className="flex flex-col gap-4">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                       <div className="flex items-center gap-4 flex-1">
                         <div className="p-3 bg-gray-900 rounded-xl text-purple-400 group-hover:bg-purple-600 group-hover:text-white transition-colors">
                           <ArrowUpRight size={20} />
@@ -458,6 +458,7 @@ const Proposals: React.FC = () => {
                         </div>
                       </div>
                     )}
+                    </div>
                   </div>
                 </div>
               );
