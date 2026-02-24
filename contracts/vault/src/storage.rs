@@ -7,7 +7,7 @@ use soroban_sdk::{contracttype, Address, Env, String, Vec};
 use crate::errors::VaultError;
 use crate::types::{
     Comment, Config, GasConfig, InsuranceConfig, ListMode, NotificationPreferences, Proposal,
-    Reputation, RetryState, Role, VaultMetrics, VelocityConfig,
+    Reputation, RetryState, Role, Subscription, SubscriptionPayment, VaultMetrics, VelocityConfig,
 };
 
 /// Storage key definitions
@@ -72,6 +72,14 @@ pub enum DataKey {
     Metrics,
     /// Retry state for a proposal -> RetryState
     RetryState(u64),
+    /// Subscription by ID -> Subscription
+    Subscription(u64),
+    /// Next subscription ID counter -> u64
+    NextSubscriptionId,
+    /// Subscription payment history -> Vec<SubscriptionPayment>
+    SubscriptionPayments(u64),
+    /// Active subscriptions by subscriber -> Vec<u64>
+    SubscriberSubscriptions(Address),
 }
 
 /// TTL constants (in ledgers, ~5 seconds each)
@@ -738,4 +746,72 @@ pub fn set_retry_state(env: &Env, proposal_id: u64, state: &RetryState) {
     env.storage()
         .persistent()
         .extend_ttl(&key, PROPOSAL_TTL / 2, PROPOSAL_TTL);
+}
+
+// ============================================================================
+// Subscription System (Issue: feature/subscription-system)
+// ============================================================================
+
+pub fn get_next_subscription_id(env: &Env) -> u64 {
+    env.storage()
+        .instance()
+        .get(&DataKey::NextSubscriptionId)
+        .unwrap_or(1)
+}
+
+pub fn increment_subscription_id(env: &Env) -> u64 {
+    let id = get_next_subscription_id(env);
+    env.storage()
+        .instance()
+        .set(&DataKey::NextSubscriptionId, &(id + 1));
+    id
+}
+
+pub fn get_subscription(env: &Env, id: u64) -> Result<Subscription, VaultError> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::Subscription(id))
+        .ok_or(VaultError::ProposalNotFound)
+}
+
+pub fn set_subscription(env: &Env, subscription: &Subscription) {
+    let key = DataKey::Subscription(subscription.id);
+    env.storage().persistent().set(&key, subscription);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, INSTANCE_TTL_THRESHOLD, INSTANCE_TTL);
+}
+
+pub fn get_subscription_payments(env: &Env, subscription_id: u64) -> Vec<SubscriptionPayment> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::SubscriptionPayments(subscription_id))
+        .unwrap_or_else(|| Vec::new(env))
+}
+
+pub fn add_subscription_payment(env: &Env, payment: &SubscriptionPayment) {
+    let mut payments = get_subscription_payments(env, payment.subscription_id);
+    payments.push_back(payment.clone());
+    let key = DataKey::SubscriptionPayments(payment.subscription_id);
+    env.storage().persistent().set(&key, &payments);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, INSTANCE_TTL_THRESHOLD, INSTANCE_TTL);
+}
+
+pub fn get_subscriber_subscriptions(env: &Env, subscriber: &Address) -> Vec<u64> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::SubscriberSubscriptions(subscriber.clone()))
+        .unwrap_or_else(|| Vec::new(env))
+}
+
+pub fn add_subscriber_subscription(env: &Env, subscriber: &Address, subscription_id: u64) {
+    let mut subs = get_subscriber_subscriptions(env, subscriber);
+    subs.push_back(subscription_id);
+    let key = DataKey::SubscriberSubscriptions(subscriber.clone());
+    env.storage().persistent().set(&key, &subs);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, INSTANCE_TTL_THRESHOLD, INSTANCE_TTL);
 }

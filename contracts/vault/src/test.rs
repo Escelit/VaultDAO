@@ -3,6 +3,7 @@
 use super::*;
 use crate::types::{
     DexConfig, RetryConfig, SwapProposal, TimeBasedThreshold, TransferDetails, VelocityConfig,
+    Subscription, SubscriptionTier, SubscriptionStatus, SubscriptionPayment,
 };
 use crate::{InitConfig, VaultDAO, VaultDAOClient};
 use soroban_sdk::{
@@ -3645,4 +3646,474 @@ fn test_retry_succeeds_after_balance_funded() {
     // Retry should succeed now
     let result = client.try_execute_proposal(&admin, &proposal_id);
     assert!(result.is_ok(), "Retry should succeed after funding");
+}
+
+
+// ============================================================================
+// Subscription System Tests
+// ============================================================================
+
+#[test]
+fn test_create_subscription() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let subscriber = Address::generate(&env);
+    let provider = Address::generate(&env);
+    
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+    
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    
+    let config = default_init_config(&env, signers, 1);
+    client.initialize(&admin, &config);
+    
+    let token_addr = Address::generate(&env);
+    
+    let sub_id = client.create_subscription(
+        &subscriber,
+        &provider,
+        &SubscriptionTier::Standard,
+        &token_addr,
+        &100_i128,
+        &17280_u64,
+        &true,
+    );
+    
+    assert_eq!(sub_id, 1);
+    
+    let subscription = client.get_subscription(&sub_id);
+    assert_eq!(subscription.subscriber, subscriber);
+    assert_eq!(subscription.service_provider, provider);
+    assert_eq!(subscription.amount_per_period, 100);
+    assert_eq!(subscription.status, SubscriptionStatus::Active);
+    assert_eq!(subscription.total_payments, 0);
+}
+
+#[test]
+fn test_subscription_renewal() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let subscriber = Address::generate(&env);
+    let provider = Address::generate(&env);
+    
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+    
+    let token_admin = Address::generate(&env);
+    let token_addr_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token_addr = token_addr_contract.address();
+    let sac_admin_client = StellarAssetClient::new(&env, &token_addr);
+    sac_admin_client.mint(&contract_id, &1000);
+    
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    
+    let config = default_init_config(&env, signers, 1);
+    client.initialize(&admin, &config);
+    
+    let sub_id = client.create_subscription(
+        &subscriber,
+        &provider,
+        &SubscriptionTier::Basic,
+        &token_addr,
+        &100_i128,
+        &1000_u64,
+        &true,
+    );
+    
+    env.ledger().with_mut(|li| {
+        li.sequence_number += 1001;
+    });
+    
+    client.renew_subscription(&sub_id);
+    
+    let subscription = client.get_subscription(&sub_id);
+    assert_eq!(subscription.total_payments, 1);
+    
+    let payments = client.get_subscription_payments(&sub_id);
+    assert_eq!(payments.len(), 1);
+    assert_eq!(payments.get(0).unwrap().amount, 100);
+}
+
+#[test]
+fn test_subscription_renewal_not_due() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let subscriber = Address::generate(&env);
+    let provider = Address::generate(&env);
+    
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+    
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    
+    let config = default_init_config(&env, signers, 1);
+    client.initialize(&admin, &config);
+    
+    let token_addr = Address::generate(&env);
+    
+    let sub_id = client.create_subscription(
+        &subscriber,
+        &provider,
+        &SubscriptionTier::Premium,
+        &token_addr,
+        &200_i128,
+        &5000_u64,
+        &true,
+    );
+    
+    let result = client.try_renew_subscription(&sub_id);
+    assert_eq!(result.err(), Some(Ok(VaultError::TimelockNotExpired)));
+}
+
+#[test]
+fn test_cancel_subscription() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let subscriber = Address::generate(&env);
+    let provider = Address::generate(&env);
+    
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+    
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    
+    let config = default_init_config(&env, signers, 1);
+    client.initialize(&admin, &config);
+    
+    let token_addr = Address::generate(&env);
+    
+    let sub_id = client.create_subscription(
+        &subscriber,
+        &provider,
+        &SubscriptionTier::Enterprise,
+        &token_addr,
+        &500_i128,
+        &10000_u64,
+        &true,
+    );
+    
+    client.cancel_subscription(&subscriber, &sub_id);
+    
+    let subscription = client.get_subscription(&sub_id);
+    assert_eq!(subscription.status, SubscriptionStatus::Cancelled);
+}
+
+#[test]
+fn test_cancel_subscription_unauthorized() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let subscriber = Address::generate(&env);
+    let provider = Address::generate(&env);
+    let unauthorized = Address::generate(&env);
+    
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+    
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    
+    let config = default_init_config(&env, signers, 1);
+    client.initialize(&admin, &config);
+    
+    let token_addr = Address::generate(&env);
+    
+    let sub_id = client.create_subscription(
+        &subscriber,
+        &provider,
+        &SubscriptionTier::Basic,
+        &token_addr,
+        &50_i128,
+        &2000_u64,
+        &false,
+    );
+    
+    let result = client.try_cancel_subscription(&unauthorized, &sub_id);
+    assert_eq!(result.err(), Some(Ok(VaultError::Unauthorized)));
+}
+
+#[test]
+fn test_upgrade_subscription() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let subscriber = Address::generate(&env);
+    let provider = Address::generate(&env);
+    
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+    
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    
+    let config = default_init_config(&env, signers, 1);
+    client.initialize(&admin, &config);
+    
+    let token_addr = Address::generate(&env);
+    
+    let sub_id = client.create_subscription(
+        &subscriber,
+        &provider,
+        &SubscriptionTier::Basic,
+        &token_addr,
+        &100_i128,
+        &5000_u64,
+        &true,
+    );
+    
+    client.upgrade_subscription(
+        &subscriber,
+        &sub_id,
+        &SubscriptionTier::Premium,
+        &300_i128,
+    );
+    
+    let subscription = client.get_subscription(&sub_id);
+    assert_eq!(subscription.tier, SubscriptionTier::Premium);
+    assert_eq!(subscription.amount_per_period, 300);
+}
+
+#[test]
+fn test_subscription_payment_tracking() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let subscriber = Address::generate(&env);
+    let provider = Address::generate(&env);
+    
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+    
+    let token_admin = Address::generate(&env);
+    let token_addr_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token_addr = token_addr_contract.address();
+    let sac_admin_client = StellarAssetClient::new(&env, &token_addr);
+    sac_admin_client.mint(&contract_id, &5000);
+    
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    
+    let config = default_init_config(&env, signers, 1);
+    client.initialize(&admin, &config);
+    
+    let sub_id = client.create_subscription(
+        &subscriber,
+        &provider,
+        &SubscriptionTier::Standard,
+        &token_addr,
+        &100_i128,
+        &1000_u64,
+        &true,
+    );
+    
+    for _i in 1..=3 {
+        env.ledger().with_mut(|li| {
+            li.sequence_number += 1000;
+        });
+        client.renew_subscription(&sub_id);
+    }
+    
+    let payments = client.get_subscription_payments(&sub_id);
+    assert_eq!(payments.len(), 3);
+    
+    let subscription = client.get_subscription(&sub_id);
+    assert_eq!(subscription.total_payments, 3);
+}
+
+#[test]
+fn test_get_subscriber_subscriptions() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let subscriber = Address::generate(&env);
+    let provider1 = Address::generate(&env);
+    let provider2 = Address::generate(&env);
+    
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+    
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    
+    let config = default_init_config(&env, signers, 1);
+    client.initialize(&admin, &config);
+    
+    let token_addr = Address::generate(&env);
+    
+    let sub_id1 = client.create_subscription(
+        &subscriber,
+        &provider1,
+        &SubscriptionTier::Basic,
+        &token_addr,
+        &50_i128,
+        &2000_u64,
+        &true,
+    );
+    
+    let sub_id2 = client.create_subscription(
+        &subscriber,
+        &provider2,
+        &SubscriptionTier::Premium,
+        &token_addr,
+        &250_i128,
+        &3000_u64,
+        &true,
+    );
+    
+    let subscriptions = client.get_subscriber_subscriptions(&subscriber);
+    assert_eq!(subscriptions.len(), 2);
+    assert_eq!(subscriptions.get(0).unwrap(), sub_id1);
+    assert_eq!(subscriptions.get(1).unwrap(), sub_id2);
+}
+
+#[test]
+fn test_subscription_invalid_amount() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let subscriber = Address::generate(&env);
+    let provider = Address::generate(&env);
+    
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+    
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    
+    let config = default_init_config(&env, signers, 1);
+    client.initialize(&admin, &config);
+    
+    let token_addr = Address::generate(&env);
+    
+    let result = client.try_create_subscription(
+        &subscriber,
+        &provider,
+        &SubscriptionTier::Basic,
+        &token_addr,
+        &0_i128,
+        &1000_u64,
+        &true,
+    );
+    assert_eq!(result.err(), Some(Ok(VaultError::InvalidAmount)));
+}
+
+#[test]
+fn test_subscription_interval_too_short() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let subscriber = Address::generate(&env);
+    let provider = Address::generate(&env);
+    
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+    
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    
+    let config = default_init_config(&env, signers, 1);
+    client.initialize(&admin, &config);
+    
+    let token_addr = Address::generate(&env);
+    
+    let result = client.try_create_subscription(
+        &subscriber,
+        &provider,
+        &SubscriptionTier::Standard,
+        &token_addr,
+        &100_i128,
+        &500_u64,
+        &true,
+    );
+    assert_eq!(result.err(), Some(Ok(VaultError::IntervalTooShort)));
+}
+
+#[test]
+fn test_renew_cancelled_subscription_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let subscriber = Address::generate(&env);
+    let provider = Address::generate(&env);
+    
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+    
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    
+    let config = default_init_config(&env, signers, 1);
+    client.initialize(&admin, &config);
+    
+    let token_addr = Address::generate(&env);
+    
+    let sub_id = client.create_subscription(
+        &subscriber,
+        &provider,
+        &SubscriptionTier::Basic,
+        &token_addr,
+        &100_i128,
+        &1000_u64,
+        &true,
+    );
+    
+    client.cancel_subscription(&subscriber, &sub_id);
+    
+    env.ledger().with_mut(|li| {
+        li.sequence_number += 1001;
+    });
+    
+    let result = client.try_renew_subscription(&sub_id);
+    assert_eq!(result.err(), Some(Ok(VaultError::ProposalNotPending)));
+}
+
+#[test]
+fn test_subscription_tier_management() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let subscriber = Address::generate(&env);
+    let provider = Address::generate(&env);
+    
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+    
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    
+    let config = default_init_config(&env, signers, 1);
+    client.initialize(&admin, &config);
+    
+    let token_addr = Address::generate(&env);
+    
+    let sub_id = client.create_subscription(
+        &subscriber,
+        &provider,
+        &SubscriptionTier::Basic,
+        &token_addr,
+        &50_i128,
+        &2000_u64,
+        &true,
+    );
+    
+    client.upgrade_subscription(&subscriber, &sub_id, &SubscriptionTier::Standard, &100_i128);
+    let sub = client.get_subscription(&sub_id);
+    assert_eq!(sub.tier, SubscriptionTier::Standard);
+    
+    client.upgrade_subscription(&subscriber, &sub_id, &SubscriptionTier::Premium, &200_i128);
+    let sub = client.get_subscription(&sub_id);
+    assert_eq!(sub.tier, SubscriptionTier::Premium);
+    
+    client.upgrade_subscription(&subscriber, &sub_id, &SubscriptionTier::Enterprise, &500_i128);
+    let sub = client.get_subscription(&sub_id);
+    assert_eq!(sub.tier, SubscriptionTier::Enterprise);
 }

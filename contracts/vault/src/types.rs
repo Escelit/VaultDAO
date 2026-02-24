@@ -609,3 +609,60 @@ pub struct RetryState {
     /// Ledger of the last retry attempt
     pub last_retry_ledger: u64,
 }
+
+// ============================================================================
+// Subscription System (Issue: feature/subscription-system)
+// ============================================================================
+
+/// Subscription tier levels
+#[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum SubscriptionTier {
+    Basic = 0,
+    Standard = 1,
+    Premium = 2,
+    Enterprise = 3,
+}
+
+/// Subscription status
+#[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum SubscriptionStatus {
+    Active = 0,
+    Cancelled = 1,
+    Expired = 2,
+    Suspended = 3,
+}
+
+/// Subscription record
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct Subscription {
+    pub id: u64,
+    pub subscriber: Address,
+    pub service_provider: Address,
+    pub tier: SubscriptionTier,
+    pub token: Address,
+    pub amount_per_period: i128,
+    pub interval_ledgers: u64,
+    pub next_renewal_ledger: u64,
+    pub created_at: u64,
+    pub status: SubscriptionStatus,
+    pub total_payments: u32,
+    pub last_payment_ledger: u64,
+    pub auto_renew: bool,
+}
+
+/// Payment record for subscription tracking
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct SubscriptionPayment {
+    pub subscription_id: u64,
+    pub payment_number: u32,
+    pub amount: i128,
+    pub paid_at: u64,
+    pub period_start: u64,
+    pub period_end: u64,
+}

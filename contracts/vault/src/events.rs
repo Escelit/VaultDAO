@@ -401,3 +401,64 @@ pub fn emit_retries_exhausted(env: &Env, proposal_id: u64, total_attempts: u32) 
         total_attempts,
     );
 }
+
+// ============================================================================
+// Subscription Events (feature/subscription-system)
+// ============================================================================
+
+/// Emit when a new subscription is created
+pub fn emit_subscription_created(
+    env: &Env,
+    subscription_id: u64,
+    subscriber: &Address,
+    tier: u32,
+    amount: i128,
+) {
+    env.events().publish(
+        (Symbol::new(env, "subscription_created"), subscription_id),
+        (subscriber.clone(), tier, amount),
+    );
+}
+
+/// Emit when a subscription is renewed
+pub fn emit_subscription_renewed(
+    env: &Env,
+    subscription_id: u64,
+    payment_number: u32,
+    amount: i128,
+) {
+    env.events().publish(
+        (Symbol::new(env, "subscription_renewed"), subscription_id),
+        (payment_number, amount),
+    );
+}
+
+/// Emit when a subscription is cancelled
+pub fn emit_subscription_cancelled(env: &Env, subscription_id: u64, cancelled_by: &Address) {
+    env.events().publish(
+        (Symbol::new(env, "subscription_cancelled"), subscription_id),
+        cancelled_by.clone(),
+    );
+}
+
+/// Emit when a subscription tier is upgraded
+pub fn emit_subscription_upgraded(
+    env: &Env,
+    subscription_id: u64,
+    old_tier: u32,
+    new_tier: u32,
+    new_amount: i128,
+) {
+    env.events().publish(
+        (Symbol::new(env, "subscription_upgraded"), subscription_id),
+        (old_tier, new_tier, new_amount),
+    );
+}
+
+/// Emit when a subscription expires
+pub fn emit_subscription_expired(env: &Env, subscription_id: u64) {
+    env.events().publish(
+        (Symbol::new(env, "subscription_expired"),),
+        subscription_id,
+    );
+}
