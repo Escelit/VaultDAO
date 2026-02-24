@@ -72,6 +72,14 @@ pub enum DataKey {
     Metrics,
     /// Retry state for a proposal -> RetryState
     RetryState(u64),
+    /// Active delegation for an address -> Delegation
+    Delegation(Address),
+    /// Delegation history entry by ID -> DelegationHistory
+    DelegationHistoryEntry(u64),
+    /// Next delegation history ID counter -> u64
+    NextDelegationHistoryId,
+    /// All delegation history IDs for an address -> Vec<u64>
+    DelegationHistoryByAddress(Address),
 }
 
 /// TTL constants (in ledgers, ~5 seconds each)
@@ -738,4 +746,118 @@ pub fn set_retry_state(env: &Env, proposal_id: u64, state: &RetryState) {
     env.storage()
         .persistent()
         .extend_ttl(&key, PROPOSAL_TTL / 2, PROPOSAL_TTL);
+}
+
+// ============================================================================
+// Delegation System (Issue: feature/proposal-delegation)
+// ============================================================================
+
+use crate::types::{Delegation, DelegationHistory};
+
+/// Get active delegation for an address
+pub fn get_delegation(env: &Env, delegator: &Address) -> Option<Delegation> {
+    let key = DataKey::Delegation(delegator.clone());
+    env.storage().persistent().get(&key)
+}
+
+/// Set or update delegation for an address
+pub fn set_delegation(env: &Env, delegation: &Delegation) {
+    let key = DataKey::Delegation(delegation.delegator.clone());
+    env.storage().persistent().set(&key, delegation);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, INSTANCE_TTL_THRESHOLD, INSTANCE_TTL);
+}
+
+/// Remove delegation for an address
+pub fn remove_delegation(env: &Env, delegator: &Address) {
+    env.storage()
+        .persistent()
+        .remove(&DataKey::Delegation(delegator.clone()));
+}
+
+/// Get next delegation history ID
+pub fn get_next_delegation_history_id(env: &Env) -> u64 {
+    env.storage()
+        .instance()
+        .get(&DataKey::NextDelegationHistoryId)
+        .unwrap_or(1)
+}
+
+/// Increment delegation history ID counter
+pub fn increment_delegation_history_id(env: &Env) -> u64 {
+    let id = get_next_delegation_history_id(env);
+    env.storage()
+        .instance()
+        .set(&DataKey::NextDelegationHistoryId, &(id + 1));
+    id
+}
+
+/// Store or update delegation history entry
+pub fn add_delegation_history(env: &Env, history: &DelegationHistory) {
+    let key = DataKey::DelegationHistoryEntry(history.id);
+    env.storage().persistent().set(&key, history);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL);
+
+    // Only add to list if this is a new entry (ended_at == 0 initially)
+    if history.ended_at == 0 {
+        let list_key = DataKey::DelegationHistoryByAddress(history.delegator.clone());
+        let mut history_ids: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&list_key)
+            .unwrap_or_else(|| Vec::new(env));
+        
+        // Check if already in list
+        let mut found = false;
+        for i in 0..history_ids.len() {
+            if history_ids.get(i).unwrap() == history.id {
+                found = true;
+                break;
+            }
+        }
+        
+        if !found {
+            history_ids.push_back(history.id);
+            env.storage().persistent().set(&list_key, &history_ids);
+            env.storage()
+                .persistent()
+                .extend_ttl(&list_key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL);
+        }
+    }
+}
+
+/// Update an existing delegation history entry
+pub fn update_delegation_history(env: &Env, history: &DelegationHistory) {
+    let key = DataKey::DelegationHistoryEntry(history.id);
+    env.storage().persistent().set(&key, history);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL);
+}
+
+/// Get delegation history for an address
+pub fn get_delegation_history(env: &Env, delegator: &Address) -> Vec<DelegationHistory> {
+    let list_key = DataKey::DelegationHistoryByAddress(delegator.clone());
+    let history_ids: Vec<u64> = env
+        .storage()
+        .persistent()
+        .get(&list_key)
+        .unwrap_or_else(|| Vec::new(env));
+
+    let mut history = Vec::new(env);
+    for i in 0..history_ids.len() {
+        if let Some(id) = history_ids.get(i) {
+            if let Some(entry) = env
+                .storage()
+                .persistent()
+                .get::<DataKey, DelegationHistory>(&DataKey::DelegationHistoryEntry(id))
+            {
+                history.push_back(entry);
+            }
+        }
+    }
+    history
 }

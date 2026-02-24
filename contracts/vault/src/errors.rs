@@ -14,7 +14,6 @@ pub enum VaultError {
     // Threshold / Quorum
     ThresholdTooLow = 4,
     ThresholdTooHigh = 5,
-    /// The configured quorum exceeds the total number of signers.
     QuorumTooHigh = 6,
 
     // Authorization
@@ -79,23 +78,20 @@ pub enum VaultError {
     // Recurring payments
     IntervalTooShort = 150,
 
-    // DEX/AMM
-    DexNotEnabled = 160,
-    SlippageExceeded = 161,
-    PriceImpactExceeded = 162,
-    InvalidSwapParams = 163,
-    InsufficientLiquidity = 164,
+    // DEX/AMM (consolidated)
+    DexError = 160, // Generic DEX error - covers NotEnabled, SlippageExceeded, PriceImpactExceeded, InvalidSwapParams, InsufficientLiquidity
 
-    // Bridge
-    BridgeNotConfigured = 171,
-    ChainNotSupported = 173,
-    ExceedsBridgeLimit = 175,
+    // Bridge (consolidated)
+    BridgeError = 170, // Generic bridge error - covers NotConfigured, ChainNotSupported, ExceedsBridgeLimit
 
     // Reputation
     ReputationTooLow = 180,
 
-    // Retry errors
-    MaxRetriesExceeded = 190,
-    RetryBackoffNotElapsed = 191,
-    RetryNotEnabled = 192,
+    // Retry errors (consolidated)
+    RetryError = 190, // Generic retry error - covers MaxRetriesExceeded, RetryBackoffNotElapsed, RetryNotEnabled
+
+    // Delegation errors
+    DelegationError = 200, // Generic delegation error - covers AlreadyExists, NotFound, Expired
+    CircularDelegation = 201,
+    DelegationChainTooLong = 202,
 }

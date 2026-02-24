@@ -605,3 +605,41 @@ pub struct RetryState {
     /// Ledger of the last retry attempt
     pub last_retry_ledger: u64,
 }
+
+// ============================================================================
+// Proposal Delegation (Issue: feature/proposal-delegation)
+// ============================================================================
+
+/// Delegation record for voting power
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct Delegation {
+    /// Address delegating their voting power
+    pub delegator: Address,
+    /// Address receiving the voting power
+    pub delegate: Address,
+    /// Ledger when delegation expires (0 = permanent)
+    pub expiry_ledger: u64,
+    /// Whether the delegation is currently active
+    pub is_active: bool,
+    /// Ledger when delegation was created
+    pub created_at: u64,
+}
+
+/// Historical delegation record for audit trail
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct DelegationHistory {
+    /// Unique ID for this delegation event
+    pub id: u64,
+    /// Address delegating their voting power
+    pub delegator: Address,
+    /// Address receiving the voting power
+    pub delegate: Address,
+    /// Ledger when delegation was created
+    pub created_at: u64,
+    /// Ledger when delegation expired or was revoked (0 = still active)
+    pub ended_at: u64,
+    /// Whether this was a revocation (true) or natural expiry (false)
+    pub was_revoked: bool,
+}

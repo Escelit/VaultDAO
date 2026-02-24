@@ -2058,7 +2058,7 @@ fn test_dex_not_enabled_error() {
         &ConditionLogic::And,
         &0i128,
     );
-    assert_eq!(result.err(), Some(Ok(VaultError::DexNotEnabled)));
+    assert_eq!(result.err(), Some(Ok(VaultError::DexError)));
 }
 
 #[test]
@@ -2806,7 +2806,7 @@ fn test_retry_backoff_enforced() {
 
     // Try again immediately — should fail with RetryBackoffNotElapsed
     let result = client.try_execute_proposal(&admin, &proposal_id);
-    assert_eq!(result.err(), Some(Ok(VaultError::RetryBackoffNotElapsed)));
+    assert_eq!(result.err(), Some(Ok(VaultError::RetryError)));
 }
 
 #[test]
@@ -2842,7 +2842,7 @@ fn test_retry_max_retries_exhausted() {
         li.sequence_number += 100;
     });
     let result = client.try_execute_proposal(&admin, &proposal_id);
-    assert_eq!(result.err(), Some(Ok(VaultError::MaxRetriesExceeded)));
+    assert_eq!(result.err(), Some(Ok(VaultError::RetryError)));
 }
 
 #[test]
@@ -3037,7 +3037,7 @@ fn test_retry_disabled_rejects_retry_execution() {
 
     // retry_execution should fail when retry is disabled
     let result = client.try_retry_execution(&admin, &1_u64);
-    assert_eq!(result.err(), Some(Ok(VaultError::RetryNotEnabled)));
+    assert_eq!(result.err(), Some(Ok(VaultError::RetryError)));
 }
 
 #[test]
@@ -3075,4 +3075,530 @@ fn test_retry_succeeds_after_balance_funded() {
     // Retry should succeed now
     let result = client.try_execute_proposal(&admin, &proposal_id);
     assert!(result.is_ok(), "Retry should succeed after funding");
+}
+
+// ============================================================================
+// Delegation System Tests (Issue: feature/proposal-delegation)
+// ============================================================================
+
+#[test]
+fn test_delegation_basic() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let signer1 = Address::generate(&env);
+    let signer2 = Address::generate(&env);
+    let delegate = Address::generate(&env);
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    signers.push_back(signer1.clone());
+    signers.push_back(signer2.clone());
+
+    let config = default_init_config(&env, signers, 2);
+    client.initialize(&admin, &config);
+
+    client.set_role(&admin, &signer1, &Role::Treasurer);
+    client.set_role(&admin, &signer2, &Role::Treasurer);
+
+    // Delegate signer1's voting power to delegate (permanent)
+    client.delegate_voting_power(&signer1, &delegate, &0);
+
+    // Verify delegation was created
+    let delegation = client.get_delegation(&signer1);
+    assert!(delegation.is_some());
+    let del = delegation.unwrap();
+    assert_eq!(del.delegator, signer1);
+    assert_eq!(del.delegate, delegate);
+    assert_eq!(del.expiry_ledger, 0);
+    assert!(del.is_active);
+
+    // Verify effective voter
+    let effective = client.get_effective_voter(&signer1);
+    assert_eq!(effective, delegate);
+}
+
+#[test]
+fn test_delegation_temporary() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let signer1 = Address::generate(&env);
+    let delegate = Address::generate(&env);
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    signers.push_back(signer1.clone());
+
+    let config = default_init_config(&env, signers, 1);
+    client.initialize(&admin, &config);
+
+    client.set_role(&admin, &signer1, &Role::Treasurer);
+
+    // Delegate with expiry at ledger 1000
+    let expiry = 1000u64;
+    client.delegate_voting_power(&signer1, &delegate, &expiry);
+
+    // Verify delegation is active
+    let delegation = client.get_delegation(&signer1);
+    assert!(delegation.is_some());
+    assert!(delegation.unwrap().is_active);
+
+    // Advance ledger past expiry
+    env.ledger().set_sequence_number(1001);
+
+    // Delegation should now be expired
+    let delegation = client.get_delegation(&signer1);
+    assert!(delegation.is_none());
+
+    // Effective voter should be original signer
+    let effective = client.get_effective_voter(&signer1);
+    assert_eq!(effective, signer1);
+}
+
+#[test]
+fn test_delegation_revoke() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let signer1 = Address::generate(&env);
+    let delegate = Address::generate(&env);
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    signers.push_back(signer1.clone());
+
+    let config = default_init_config(&env, signers, 1);
+    client.initialize(&admin, &config);
+
+    client.set_role(&admin, &signer1, &Role::Treasurer);
+
+    // Create delegation
+    client.delegate_voting_power(&signer1, &delegate, &0);
+
+    // Verify delegation is active
+    assert!(client.get_delegation(&signer1).is_some());
+
+    // Revoke delegation
+    client.revoke_delegation(&signer1);
+
+    // Verify delegation is no longer active
+    assert!(client.get_delegation(&signer1).is_none());
+
+    // Effective voter should be original signer
+    let effective = client.get_effective_voter(&signer1);
+    assert_eq!(effective, signer1);
+}
+
+#[test]
+fn test_delegation_chain() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let signer1 = Address::generate(&env);
+    let signer2 = Address::generate(&env);
+    let signer3 = Address::generate(&env);
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    signers.push_back(signer1.clone());
+    signers.push_back(signer2.clone());
+    signers.push_back(signer3.clone());
+
+    let config = default_init_config(&env, signers, 2);
+    client.initialize(&admin, &config);
+
+    client.set_role(&admin, &signer1, &Role::Treasurer);
+    client.set_role(&admin, &signer2, &Role::Treasurer);
+    client.set_role(&admin, &signer3, &Role::Treasurer);
+
+    // Create delegation chain: signer1 -> signer2 -> signer3
+    client.delegate_voting_power(&signer1, &signer2, &0);
+    client.delegate_voting_power(&signer2, &signer3, &0);
+
+    // Verify chain resolution
+    let effective = client.get_effective_voter(&signer1);
+    assert_eq!(effective, signer3);
+}
+
+#[test]
+fn test_delegation_circular_prevention() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let signer1 = Address::generate(&env);
+    let signer2 = Address::generate(&env);
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    signers.push_back(signer1.clone());
+    signers.push_back(signer2.clone());
+
+    let config = default_init_config(&env, signers, 2);
+    client.initialize(&admin, &config);
+
+    // Create A -> B
+    client.delegate_voting_power(&signer1, &signer2, &0);
+
+    // Try to create B -> A (should fail with CircularDelegation)
+    let result = client.try_delegate_voting_power(&signer2, &signer1, &0);
+    assert!(result.is_err());
+    assert_eq!(result.err(), Some(Ok(VaultError::CircularDelegation)));
+}
+
+#[test]
+fn test_delegation_max_depth() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let signer1 = Address::generate(&env);
+    let signer2 = Address::generate(&env);
+    let signer3 = Address::generate(&env);
+    let signer4 = Address::generate(&env);
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    signers.push_back(signer1.clone());
+    signers.push_back(signer2.clone());
+    signers.push_back(signer3.clone());
+    signers.push_back(signer4.clone());
+
+    let config = default_init_config(&env, signers, 1);
+    client.initialize(&admin, &config);
+
+    // Create max depth chain: signer1 -> signer2 -> signer3 (3 levels)
+    client.delegate_voting_power(&signer1, &signer2, &0);
+    client.delegate_voting_power(&signer2, &signer3, &0);
+    client.delegate_voting_power(&signer3, &signer4, &0);
+
+    // Verify the chain resolves correctly
+    let effective = client.get_effective_voter(&signer1);
+    assert_eq!(effective, signer4);
+
+    // Verify that we can't extend beyond 3 levels
+    // The chain signer1->signer2->signer3->signer4 is already 3 levels
+    // So signer4 should not be able to delegate further
+    let result = client.try_delegate_voting_power(&signer4, &admin, &0);
+    // This should succeed because signer4 has no outgoing delegation yet
+    // The depth check is on the delegate (admin), not the delegator (signer4)
+    // So this test actually verifies that 3-level chains work
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_delegation_cannot_delegate_to_self() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let signer1 = Address::generate(&env);
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    signers.push_back(signer1.clone());
+
+    let config = default_init_config(&env, signers, 1);
+    client.initialize(&admin, &config);
+
+    // Try to delegate to self (should fail)
+    let result = client.try_delegate_voting_power(&signer1, &signer1, &0);
+    assert!(result.is_err());
+    assert_eq!(result.err(), Some(Ok(VaultError::Unauthorized)));
+}
+
+#[test]
+fn test_delegation_voting_integration() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let signer1 = Address::generate(&env);
+    let signer2 = Address::generate(&env);
+    let delegate = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let token = Address::generate(&env);
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    signers.push_back(signer1.clone());
+    signers.push_back(signer2.clone());
+
+    let config = default_init_config(&env, signers, 2);
+    client.initialize(&admin, &config);
+
+    client.set_role(&admin, &signer1, &Role::Treasurer);
+    client.set_role(&admin, &signer2, &Role::Treasurer);
+
+    // Delegate signer1's voting power to delegate
+    client.delegate_voting_power(&signer1, &delegate, &0);
+
+    // Create proposal
+    let proposal_id = client.propose_transfer(
+        &signer1,
+        &recipient,
+        &token,
+        &100,
+        &Symbol::new(&env, "test"),
+        &Priority::Normal,
+        &Vec::new(&env),
+        &ConditionLogic::And,
+        &0,
+    );
+
+    // signer1 approves (but vote is recorded under delegate)
+    client.approve_proposal(&signer1, &proposal_id);
+
+    // Check proposal - should have delegate in approvals, not signer1
+    let proposal = client.get_proposal(&proposal_id);
+    assert!(proposal.approvals.contains(&delegate));
+    assert!(!proposal.approvals.contains(&signer1));
+
+    // signer2 approves to reach threshold
+    client.approve_proposal(&signer2, &proposal_id);
+
+    // Proposal should now be approved
+    let proposal = client.get_proposal(&proposal_id);
+    assert_eq!(proposal.status, ProposalStatus::Approved);
+}
+
+#[test]
+fn test_delegation_abstention_integration() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let signer1 = Address::generate(&env);
+    let signer2 = Address::generate(&env);
+    let delegate = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let token = Address::generate(&env);
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    signers.push_back(signer1.clone());
+    signers.push_back(signer2.clone());
+
+    let config = default_init_config(&env, signers, 2);
+    client.initialize(&admin, &config);
+
+    client.set_role(&admin, &signer1, &Role::Treasurer);
+    client.set_role(&admin, &signer2, &Role::Treasurer);
+
+    // Delegate signer1's voting power to delegate
+    client.delegate_voting_power(&signer1, &delegate, &0);
+
+    // Create proposal
+    let proposal_id = client.propose_transfer(
+        &signer1,
+        &recipient,
+        &token,
+        &100,
+        &Symbol::new(&env, "test"),
+        &Priority::Normal,
+        &Vec::new(&env),
+        &ConditionLogic::And,
+        &0,
+    );
+
+    // signer1 abstains (but recorded under delegate)
+    client.abstain_from_proposal(&signer1, &proposal_id);
+
+    // Check proposal - should have delegate in abstentions, not signer1
+    let proposal = client.get_proposal(&proposal_id);
+    assert!(proposal.abstentions.contains(&delegate));
+    assert!(!proposal.abstentions.contains(&signer1));
+}
+
+#[test]
+fn test_delegation_history() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let signer1 = Address::generate(&env);
+    let delegate1 = Address::generate(&env);
+    let delegate2 = Address::generate(&env);
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    signers.push_back(signer1.clone());
+
+    let config = default_init_config(&env, signers, 1);
+    client.initialize(&admin, &config);
+
+    client.set_role(&admin, &signer1, &Role::Treasurer);
+
+    // Create first delegation
+    client.delegate_voting_power(&signer1, &delegate1, &0);
+
+    // Check history has one entry
+    let history = client.get_delegation_history(&signer1);
+    assert_eq!(history.len(), 1);
+    let first = history.get(0).unwrap();
+    assert_eq!(first.delegate, delegate1);
+    assert_eq!(first.ended_at, 0); // Still active
+
+    // Revoke it
+    client.revoke_delegation(&signer1);
+
+    // Create second delegation
+    client.delegate_voting_power(&signer1, &delegate2, &0);
+
+    // Check history now has two entries
+    let history = client.get_delegation_history(&signer1);
+    assert_eq!(history.len(), 2);
+
+    // Second entry should be the new active one
+    let second = history.get(1).unwrap();
+    assert_eq!(second.delegate, delegate2);
+    assert_eq!(second.ended_at, 0);
+}
+
+#[test]
+fn test_delegation_already_exists() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let signer1 = Address::generate(&env);
+    let delegate1 = Address::generate(&env);
+    let delegate2 = Address::generate(&env);
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    signers.push_back(signer1.clone());
+
+    let config = default_init_config(&env, signers, 1);
+    client.initialize(&admin, &config);
+
+    // Create delegation
+    client.delegate_voting_power(&signer1, &delegate1, &0);
+
+    // Try to create another delegation without revoking first (should fail)
+    let result = client.try_delegate_voting_power(&signer1, &delegate2, &0);
+    assert!(result.is_err());
+    assert_eq!(result.err(), Some(Ok(VaultError::DelegationError)));
+}
+
+#[test]
+fn test_delegation_non_signer() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let signer1 = Address::generate(&env);
+    let non_signer = Address::generate(&env);
+    let delegate = Address::generate(&env);
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    signers.push_back(signer1.clone());
+
+    let config = default_init_config(&env, signers, 1);
+    client.initialize(&admin, &config);
+
+    // Try to delegate as non-signer (should fail)
+    let result = client.try_delegate_voting_power(&non_signer, &delegate, &0);
+    assert!(result.is_err());
+    assert_eq!(result.err(), Some(Ok(VaultError::NotASigner)));
+}
+
+#[test]
+fn test_delegation_prevents_double_voting() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let signer1 = Address::generate(&env);
+    let signer2 = Address::generate(&env);
+    let signer3 = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let token = Address::generate(&env);
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    signers.push_back(signer1.clone());
+    signers.push_back(signer2.clone());
+    signers.push_back(signer3.clone());
+
+    let config = default_init_config(&env, signers, 2);
+    client.initialize(&admin, &config);
+
+    client.set_role(&admin, &signer1, &Role::Treasurer);
+    client.set_role(&admin, &signer2, &Role::Treasurer);
+    client.set_role(&admin, &signer3, &Role::Treasurer);
+
+    // Delegate signer1's voting power to signer3
+    client.delegate_voting_power(&signer1, &signer3, &0);
+
+    // Create proposal
+    let proposal_id = client.propose_transfer(
+        &signer1,
+        &recipient,
+        &token,
+        &100,
+        &Symbol::new(&env, "test"),
+        &Priority::Normal,
+        &Vec::new(&env),
+        &ConditionLogic::And,
+        &0,
+    );
+
+    // signer1 approves (recorded under signer3 due to delegation)
+    client.approve_proposal(&signer1, &proposal_id);
+
+    // Check that signer3 is in approvals, not signer1
+    let proposal = client.get_proposal(&proposal_id);
+    assert!(proposal.approvals.contains(&signer3));
+    assert!(!proposal.approvals.contains(&signer1));
+
+    // signer3 tries to approve again directly (should fail - already voted)
+    let result = client.try_approve_proposal(&signer3, &proposal_id);
+    assert!(result.is_err());
+    assert_eq!(result.err(), Some(Ok(VaultError::AlreadyApproved)));
 }

@@ -401,3 +401,49 @@ pub fn emit_retries_exhausted(env: &Env, proposal_id: u64, total_attempts: u32) 
         total_attempts,
     );
 }
+
+// ============================================================================
+// Delegation Events (feature/proposal-delegation)
+// ============================================================================
+
+/// Emit when voting power is delegated
+pub fn emit_delegation_created(
+    env: &Env,
+    delegator: &Address,
+    delegate: &Address,
+    expiry_ledger: u64,
+) {
+    env.events().publish(
+        (Symbol::new(env, "delegation_created"),),
+        (delegator.clone(), delegate.clone(), expiry_ledger),
+    );
+}
+
+/// Emit when delegation is revoked
+pub fn emit_delegation_revoked(env: &Env, delegator: &Address, delegate: &Address) {
+    env.events().publish(
+        (Symbol::new(env, "delegation_revoked"),),
+        (delegator.clone(), delegate.clone()),
+    );
+}
+
+/// Emit when delegation expires naturally
+pub fn emit_delegation_expired(env: &Env, delegator: &Address, delegate: &Address) {
+    env.events().publish(
+        (Symbol::new(env, "delegation_expired"),),
+        (delegator.clone(), delegate.clone()),
+    );
+}
+
+/// Emit when a vote is cast using delegated power
+pub fn emit_delegated_vote(
+    env: &Env,
+    proposal_id: u64,
+    voter: &Address,
+    original_delegator: &Address,
+) {
+    env.events().publish(
+        (Symbol::new(env, "delegated_vote"), proposal_id),
+        (voter.clone(), original_delegator.clone()),
+    );
+}
