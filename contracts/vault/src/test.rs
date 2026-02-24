@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use super::*;
-use crate::types::{DexConfig, SwapProposal, TimeBasedThreshold, TransferDetails, VelocityConfig};
+use crate::types::{DexConfig, RetryConfig, SwapProposal, TimeBasedThreshold, TransferDetails, VelocityConfig};
 use crate::{InitConfig, VaultDAO, VaultDAOClient};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
@@ -34,6 +34,11 @@ fn default_init_config(
         threshold_strategy: ThresholdStrategy::Fixed,
         default_voting_deadline: 0,
         veto_addresses: Vec::new(_env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     }
 }
 
@@ -73,6 +78,11 @@ fn test_multisig_approval() {
         },
         threshold_strategy: ThresholdStrategy::Fixed,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
 
@@ -140,6 +150,11 @@ fn test_unauthorized_proposal() {
         },
         threshold_strategy: ThresholdStrategy::Fixed,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
 
@@ -194,6 +209,11 @@ fn test_timelock_violation() {
         },
         threshold_strategy: ThresholdStrategy::Fixed,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
@@ -257,6 +277,11 @@ fn test_priority_levels() {
         },
         threshold_strategy: ThresholdStrategy::Fixed,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
@@ -348,6 +373,11 @@ fn test_get_proposals_by_priority() {
         },
         threshold_strategy: ThresholdStrategy::Fixed,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
@@ -417,6 +447,11 @@ fn test_change_priority_unauthorized() {
         },
         threshold_strategy: ThresholdStrategy::Fixed,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
@@ -469,6 +504,11 @@ fn test_comment_functionality() {
         },
         threshold_strategy: ThresholdStrategy::Fixed,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
@@ -547,6 +587,11 @@ fn test_blacklist_mode() {
         },
         threshold_strategy: ThresholdStrategy::Fixed,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &treasurer, &Role::Treasurer);
@@ -618,6 +663,11 @@ fn test_abstention_does_not_count_toward_threshold() {
         },
         threshold_strategy: ThresholdStrategy::Fixed,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
@@ -684,6 +734,11 @@ fn test_list_management() {
         },
         threshold_strategy: ThresholdStrategy::Fixed,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
 
@@ -735,6 +790,11 @@ fn test_cannot_abstain_after_voting() {
         },
         threshold_strategy: ThresholdStrategy::Fixed,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
@@ -790,6 +850,11 @@ fn test_cannot_abstain_twice() {
         },
         threshold_strategy: ThresholdStrategy::Fixed,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
@@ -846,6 +911,11 @@ fn test_velocity_limit_enforcement() {
         },
         threshold_strategy: ThresholdStrategy::Fixed,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer, &Role::Treasurer);
@@ -921,6 +991,11 @@ fn test_verify_attachment() {
         },
         threshold_strategy: ThresholdStrategy::Fixed,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
@@ -974,6 +1049,11 @@ fn test_remove_attachment() {
         },
         threshold_strategy: ThresholdStrategy::Fixed,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
@@ -1033,6 +1113,11 @@ fn test_attachment_unauthorized() {
         },
         threshold_strategy: ThresholdStrategy::Fixed,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
@@ -1089,6 +1174,11 @@ fn test_attachment_duplicate() {
         },
         threshold_strategy: ThresholdStrategy::Fixed,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
@@ -1145,6 +1235,11 @@ fn test_attachment_invalid_hash() {
         },
         threshold_strategy: ThresholdStrategy::Fixed,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
@@ -1198,6 +1293,11 @@ fn test_admin_can_add_attachment() {
         },
         threshold_strategy: ThresholdStrategy::Fixed,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
@@ -1253,6 +1353,11 @@ fn test_fixed_threshold_strategy() {
         },
         threshold_strategy: ThresholdStrategy::Fixed,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
@@ -1317,6 +1422,11 @@ fn test_percentage_threshold_strategy() {
         },
         threshold_strategy: ThresholdStrategy::Percentage(67),
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
@@ -1392,6 +1502,11 @@ fn test_time_based_threshold_strategy() {
             reduction_delay: 100,
         }),
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
@@ -1456,6 +1571,11 @@ fn test_condition_balance_above() {
         },
         threshold_strategy: ThresholdStrategy::Fixed,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
@@ -1517,6 +1637,11 @@ fn test_condition_date_after() {
         },
         threshold_strategy: ThresholdStrategy::Fixed,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
@@ -1589,6 +1714,11 @@ fn test_condition_multiple_and_logic() {
         },
         threshold_strategy: ThresholdStrategy::Fixed,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
@@ -1667,6 +1797,11 @@ fn test_condition_multiple_or_logic() {
         },
         threshold_strategy: ThresholdStrategy::Fixed,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
@@ -1738,6 +1873,11 @@ fn test_condition_no_conditions() {
         },
         threshold_strategy: ThresholdStrategy::Fixed,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
@@ -1798,6 +1938,11 @@ fn test_dex_config_setup() {
         },
         threshold_strategy: ThresholdStrategy::Fixed,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
 
@@ -1855,6 +2000,11 @@ fn test_swap_proposal_creation() {
         },
         threshold_strategy: ThresholdStrategy::Fixed,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &treasurer, &Role::Treasurer);
@@ -1918,6 +2068,11 @@ fn test_dex_not_enabled_error() {
         },
         threshold_strategy: ThresholdStrategy::Fixed,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &treasurer, &Role::Treasurer);
@@ -1968,6 +2123,11 @@ fn test_batch_propose_multi_token() {
         },
         threshold_strategy: ThresholdStrategy::Fixed,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &treasurer, &Role::Treasurer);
@@ -2042,6 +2202,11 @@ fn test_batch_propose_exceeds_max_size() {
         },
         threshold_strategy: ThresholdStrategy::Fixed,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &treasurer, &Role::Treasurer);
@@ -2106,6 +2271,11 @@ fn test_quorum_disabled_behaves_like_fixed_threshold() {
         },
         threshold_strategy: ThresholdStrategy::Fixed,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
@@ -2170,6 +2340,11 @@ fn test_quorum_blocks_approval_until_satisfied() {
         threshold_strategy: ThresholdStrategy::Fixed,
         default_voting_deadline: 0,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
@@ -2255,6 +2430,11 @@ fn test_abstentions_count_toward_quorum_but_not_threshold() {
         threshold_strategy: ThresholdStrategy::Fixed,
         default_voting_deadline: 0,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
@@ -2340,6 +2520,11 @@ fn test_get_quorum_status() {
         threshold_strategy: ThresholdStrategy::Fixed,
         default_voting_deadline: 0,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
@@ -2410,6 +2595,11 @@ fn test_update_quorum() {
         },
         threshold_strategy: ThresholdStrategy::Fixed,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
 
@@ -2462,6 +2652,11 @@ fn test_quorum_satisfied_by_approvals_alone() {
         threshold_strategy: ThresholdStrategy::Fixed,
         default_voting_deadline: 0,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
@@ -2522,6 +2717,11 @@ fn test_initialize_rejects_quorum_too_high() {
         threshold_strategy: ThresholdStrategy::Fixed,
         default_voting_deadline: 0,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
 
     let result = client.try_initialize(&admin, &config);
@@ -2565,6 +2765,11 @@ fn test_veto_pending_proposal() {
         threshold_strategy: ThresholdStrategy::Fixed,
         default_voting_deadline: 0,
         veto_addresses,
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
@@ -2624,6 +2829,11 @@ fn test_veto_requires_veto_address() {
         threshold_strategy: ThresholdStrategy::Fixed,
         default_voting_deadline: 0,
         veto_addresses: Vec::new(&env),
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
@@ -2683,6 +2893,11 @@ fn test_veto_blocks_execution_of_approved_proposal() {
         threshold_strategy: ThresholdStrategy::Fixed,
         default_voting_deadline: 0,
         veto_addresses,
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
