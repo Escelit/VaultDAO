@@ -2672,10 +2672,11 @@ fn test_veto_blocks_execution_of_approved_proposal() {
     );
 
     client.veto_proposal(&vetoer, &proposal_id);
-    assert_eq!(client.get_proposal(&proposal_id).status, ProposalStatus::Vetoed);
+    assert_eq!(
+        client.get_proposal(&proposal_id).status,
+        ProposalStatus::Vetoed
+    );
 
     let res = client.try_execute_proposal(&admin, &proposal_id);
     assert_eq!(res.err(), Some(Ok(VaultError::ProposalNotApproved)));
 }
-
-
