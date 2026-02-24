@@ -34,6 +34,12 @@ const PROPOSAL_EXPIRY_LEDGERS: u64 = 120_960;
 /// Maximum proposals that can be batch-executed in one call (gas limit)
 const MAX_BATCH_SIZE: u32 = 10;
 
+/// Maximum metadata entries stored per proposal
+const MAX_METADATA_ENTRIES: u32 = 16;
+
+/// Maximum length for a single metadata value
+const MAX_METADATA_VALUE_LEN: u32 = 256;
+
 /// Reputation adjustments
 const REP_EXEC_PROPOSER: u32 = 10;
 const REP_EXEC_APPROVER: u32 = 5;
@@ -245,6 +251,8 @@ impl VaultDAO {
             token: token_addr.clone(),
             amount,
             memo,
+            metadata: Map::new(&env),
+            tags: Vec::new(&env),
             approvals: Vec::new(&env),
             abstentions: Vec::new(&env),
             attachments: Vec::new(&env),
@@ -429,6 +437,8 @@ impl VaultDAO {
                 token: transfer.token.clone(),
                 amount: transfer.amount,
                 memo: transfer.memo.clone(),
+                metadata: Map::new(&env),
+                tags: Vec::new(&env),
                 approvals: Vec::new(&env),
                 abstentions: Vec::new(&env),
                 attachments: Vec::new(&env),
