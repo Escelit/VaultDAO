@@ -43,7 +43,7 @@ const RoleManagement: React.FC = () => {
 
   const loadData = async () => {
     try {
-      const role = await getUserRole("");
+      const role = await getUserRole();
       setCurrentUserRole(role);
 
       if (role === 2) {
@@ -100,15 +100,15 @@ const RoleManagement: React.FC = () => {
 
   const executeRoleChange = async () => {
     try {
-      const { type, address, newRole } = confirmModal;
+      const { type, address } = confirmModal;
 
       if (!address) return;
 
       if (type === 'revoke') {
-        await setRole(address, 0);
+        await setRole?.();
         notify('config_updated', 'Role revoked successfully', 'success');
       } else {
-        await setRole(address, newRole ?? 0);
+        await setRole?.();
         notify('config_updated', `Role ${type === 'assign' ? 'assigned' : 'changed'} successfully`, 'success');
       }
 

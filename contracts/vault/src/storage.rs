@@ -6,8 +6,9 @@ use soroban_sdk::{contracttype, Address, Env, String, Vec};
 
 use crate::errors::VaultError;
 use crate::types::{
-    Comment, Config, InsuranceConfig, ListMode, NotificationPreferences, Proposal, Reputation,
-    Role, VelocityConfig,
+    Comment, Config, CrossVaultConfig, CrossVaultProposal, Dispute, GasConfig, InsuranceConfig,
+    ListMode, NotificationPreferences, Proposal, ProposalAmendment, Reputation, RetryState, Role,
+    VaultMetrics, VelocityConfig,
 };
 
 /// Storage key definitions
@@ -36,6 +37,12 @@ pub enum DataKey {
     NextRecurringId,
     /// Proposer transfer timestamps for velocity checking (Address) -> Vec<u64>
     VelocityHistory(Address),
+    /// Cancellation record for a proposal -> CancellationRecord
+    CancellationRecord(u64),
+    /// List of all cancelled proposal IDs -> Vec<u64>
+    CancellationHistory,
+    /// Amendment history for a proposal -> Vec<ProposalAmendment>
+    AmendmentHistory(u64),
     /// Recipient list mode -> ListMode
     ListMode,
     /// Whitelist flag for address -> bool
@@ -56,6 +63,30 @@ pub enum DataKey {
     InsuranceConfig,
     /// Per-user notification preferences -> NotificationPreferences
     NotificationPrefs(Address),
+    /// DEX configuration -> DexConfig
+    DexConfig,
+    /// Swap proposal by ID -> SwapProposal
+    SwapProposal(u64),
+    /// Swap result by proposal ID -> SwapResult
+    SwapResult(u64),
+    /// Gas execution limit configuration -> GasConfig
+    GasConfig,
+    /// Vault-wide performance metrics -> VaultMetrics
+    Metrics,
+    /// Retry state for a proposal -> RetryState
+    RetryState(u64),
+    /// Cross-vault proposal by ID -> CrossVaultProposal
+    CrossVaultProposal(u64),
+    /// Cross-vault configuration -> CrossVaultConfig
+    CrossVaultConfig,
+    /// Dispute by ID -> Dispute
+    Dispute(u64),
+    /// Dispute ID for a proposal -> u64
+    ProposalDispute(u64),
+    /// Next dispute ID counter -> u64
+    NextDisputeId,
+    /// Arbitrator addresses -> Vec<Address>
+    Arbitrators,
 }
 
 /// TTL constants (in ledgers, ~5 seconds each)
@@ -63,6 +94,8 @@ pub const DAY_IN_LEDGERS: u32 = 17_280; // ~24 hours
 pub const PROPOSAL_TTL: u32 = DAY_IN_LEDGERS * 7; // 7 days
 pub const INSTANCE_TTL: u32 = DAY_IN_LEDGERS * 30; // 30 days
 pub const INSTANCE_TTL_THRESHOLD: u32 = DAY_IN_LEDGERS * 7; // Extend when below 7 days
+pub const PERSISTENT_TTL: u32 = DAY_IN_LEDGERS * 30; // 30 days
+pub const PERSISTENT_TTL_THRESHOLD: u32 = DAY_IN_LEDGERS * 7; // Extend when below 7 days
 
 // ============================================================================
 // Initialization
@@ -122,6 +155,10 @@ pub fn get_proposal(env: &Env, id: u64) -> Result<Proposal, VaultError> {
         .ok_or(VaultError::ProposalNotFound)?;
     proposal.attachments = get_attachments(env, id);
     Ok(proposal)
+}
+
+pub fn proposal_exists(env: &Env, id: u64) -> bool {
+    env.storage().persistent().has(&DataKey::Proposal(id))
 }
 
 pub fn set_proposal(env: &Env, proposal: &Proposal) {
@@ -374,6 +411,86 @@ pub fn check_and_update_velocity(env: &Env, addr: &Address, config: &VelocityCon
     true
 }
 
+pub fn set_cancellation_record(env: &Env, record: &crate::types::CancellationRecord) {
+    let key = DataKey::CancellationRecord(record.proposal_id);
+    env.storage().persistent().set(&key, record);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL);
+}
+
+pub fn get_cancellation_record(
+    env: &Env,
+    proposal_id: u64,
+) -> Result<crate::types::CancellationRecord, crate::errors::VaultError> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::CancellationRecord(proposal_id))
+        .ok_or(crate::errors::VaultError::ProposalNotFound)
+}
+
+pub fn add_to_cancellation_history(env: &Env, proposal_id: u64) {
+    let key = DataKey::CancellationHistory;
+    let mut history: soroban_sdk::Vec<u64> = env
+        .storage()
+        .persistent()
+        .get(&key)
+        .unwrap_or(soroban_sdk::Vec::new(env));
+    history.push_back(proposal_id);
+    env.storage().persistent().set(&key, &history);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL);
+}
+
+pub fn get_cancellation_history(env: &Env) -> soroban_sdk::Vec<u64> {
+    let key = DataKey::CancellationHistory;
+    env.storage()
+        .persistent()
+        .get(&key)
+        .unwrap_or(soroban_sdk::Vec::new(env))
+}
+
+pub fn get_amendment_history(env: &Env, proposal_id: u64) -> Vec<ProposalAmendment> {
+    let key = DataKey::AmendmentHistory(proposal_id);
+    env.storage()
+        .persistent()
+        .get(&key)
+        .unwrap_or_else(|| Vec::new(env))
+}
+
+pub fn add_amendment_record(env: &Env, record: &ProposalAmendment) {
+    let key = DataKey::AmendmentHistory(record.proposal_id);
+    let mut history = get_amendment_history(env, record.proposal_id);
+    history.push_back(record.clone());
+    env.storage().persistent().set(&key, &history);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL);
+}
+
+/// Refund spending limits when a proposal is cancelled
+pub fn refund_spending_limits(env: &Env, amount: i128) {
+    // Refund daily
+    let today = get_day_number(env);
+    let spent_today = get_daily_spent(env, today);
+    let refunded_daily = spent_today.saturating_sub(amount).max(0);
+    let key_daily = DataKey::DailySpent(today);
+    env.storage().temporary().set(&key_daily, &refunded_daily);
+    env.storage()
+        .temporary()
+        .extend_ttl(&key_daily, DAY_IN_LEDGERS * 2, DAY_IN_LEDGERS * 2);
+
+    // Refund weekly
+    let week = get_week_number(env);
+    let spent_week = get_weekly_spent(env, week);
+    let refunded_weekly = spent_week.saturating_sub(amount).max(0);
+    let key_weekly = DataKey::WeeklySpent(week);
+    env.storage().temporary().set(&key_weekly, &refunded_weekly);
+    env.storage()
+        .temporary()
+        .extend_ttl(&key_weekly, DAY_IN_LEDGERS * 14, DAY_IN_LEDGERS * 14);
+}
 // ============================================================================
 // Comments
 // ============================================================================
@@ -480,12 +597,16 @@ pub fn apply_reputation_decay(env: &Env, rep: &mut Reputation) {
     }
     // Move score toward neutral (500) by 5% per period
     for _ in 0..periods {
-        if rep.score > 500 {
-            let diff = rep.score - 500;
-            rep.score = rep.score.saturating_sub(diff / 20 + 1);
-        } else if rep.score < 500 {
-            let diff = 500 - rep.score;
-            rep.score = rep.score.saturating_add(diff / 20 + 1);
+        match rep.score.cmp(&500) {
+            core::cmp::Ordering::Greater => {
+                let diff = rep.score - 500;
+                rep.score = rep.score.saturating_sub(diff / 20 + 1);
+            }
+            core::cmp::Ordering::Less => {
+                let diff = 500 - rep.score;
+                rep.score = rep.score.saturating_add(diff / 20 + 1);
+            }
+            core::cmp::Ordering::Equal => {}
         }
     }
     rep.last_decay_ledger = current_ledger;
@@ -530,4 +651,214 @@ pub fn set_notification_prefs(env: &Env, addr: &Address, prefs: &NotificationPre
     env.storage()
         .persistent()
         .extend_ttl(&key, INSTANCE_TTL_THRESHOLD, INSTANCE_TTL);
+}
+
+// ============================================================================
+// DEX/AMM Integration (Issue: feature/amm-integration)
+// ============================================================================
+
+use crate::types::{DexConfig, SwapProposal, SwapResult};
+
+pub fn set_dex_config(env: &Env, config: &DexConfig) {
+    env.storage().instance().set(&DataKey::DexConfig, config);
+}
+
+pub fn get_dex_config(env: &Env) -> Option<DexConfig> {
+    env.storage().instance().get(&DataKey::DexConfig)
+}
+
+pub fn set_swap_proposal(env: &Env, proposal_id: u64, swap: &SwapProposal) {
+    let key = DataKey::SwapProposal(proposal_id);
+    env.storage().persistent().set(&key, swap);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, INSTANCE_TTL_THRESHOLD, PROPOSAL_TTL);
+}
+
+pub fn get_swap_proposal(env: &Env, proposal_id: u64) -> Option<SwapProposal> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::SwapProposal(proposal_id))
+}
+
+pub fn set_swap_result(env: &Env, proposal_id: u64, result: &SwapResult) {
+    let key = DataKey::SwapResult(proposal_id);
+    env.storage().persistent().set(&key, result);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, INSTANCE_TTL_THRESHOLD, PROPOSAL_TTL);
+}
+
+pub fn get_swap_result(env: &Env, proposal_id: u64) -> Option<SwapResult> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::SwapResult(proposal_id))
+}
+
+// ============================================================================
+// Gas Config (Issue: feature/gas-limits)
+// ============================================================================
+
+pub fn get_gas_config(env: &Env) -> GasConfig {
+    env.storage()
+        .instance()
+        .get(&DataKey::GasConfig)
+        .unwrap_or_else(GasConfig::default)
+}
+
+pub fn set_gas_config(env: &Env, config: &GasConfig) {
+    env.storage().instance().set(&DataKey::GasConfig, config);
+}
+
+// ============================================================================
+// Performance Metrics (Issue: feature/performance-metrics)
+// ============================================================================
+
+pub fn get_metrics(env: &Env) -> VaultMetrics {
+    env.storage()
+        .instance()
+        .get(&DataKey::Metrics)
+        .unwrap_or_else(VaultMetrics::default)
+}
+
+pub fn set_metrics(env: &Env, metrics: &VaultMetrics) {
+    env.storage().instance().set(&DataKey::Metrics, metrics);
+}
+
+/// Increment proposal counter in metrics
+pub fn metrics_on_proposal(env: &Env) {
+    let mut m = get_metrics(env);
+    m.total_proposals += 1;
+    m.last_updated_ledger = env.ledger().sequence() as u64;
+    set_metrics(env, &m);
+}
+
+/// Record a successful execution in metrics
+pub fn metrics_on_execution(env: &Env, gas_used: u64, execution_time_ledgers: u64) {
+    let mut m = get_metrics(env);
+    m.executed_count += 1;
+    m.total_gas_used += gas_used;
+    m.total_execution_time_ledgers += execution_time_ledgers;
+    m.last_updated_ledger = env.ledger().sequence() as u64;
+    set_metrics(env, &m);
+}
+
+/// Record a rejection in metrics
+pub fn metrics_on_rejection(env: &Env) {
+    let mut m = get_metrics(env);
+    m.rejected_count += 1;
+    m.last_updated_ledger = env.ledger().sequence() as u64;
+    set_metrics(env, &m);
+}
+
+/// Record an expiry in metrics
+pub fn metrics_on_expiry(env: &Env) {
+    let mut m = get_metrics(env);
+    m.expired_count += 1;
+    m.last_updated_ledger = env.ledger().sequence() as u64;
+    set_metrics(env, &m);
+}
+
+// ============================================================================
+// Execution Retry (Issue: feature/execution-retry)
+// ============================================================================
+
+pub fn get_retry_state(env: &Env, proposal_id: u64) -> Option<RetryState> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::RetryState(proposal_id))
+}
+
+pub fn set_retry_state(env: &Env, proposal_id: u64, state: &RetryState) {
+    let key = DataKey::RetryState(proposal_id);
+    env.storage().persistent().set(&key, state);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, PROPOSAL_TTL / 2, PROPOSAL_TTL);
+}
+
+// ============================================================================
+// Cross-Vault Coordination (Issue: feature/cross-vault-coordination)
+// ============================================================================
+
+pub fn get_cross_vault_config(env: &Env) -> Option<CrossVaultConfig> {
+    env.storage().instance().get(&DataKey::CrossVaultConfig)
+}
+
+pub fn set_cross_vault_config(env: &Env, config: &CrossVaultConfig) {
+    env.storage()
+        .instance()
+        .set(&DataKey::CrossVaultConfig, config);
+}
+
+pub fn get_cross_vault_proposal(env: &Env, proposal_id: u64) -> Option<CrossVaultProposal> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::CrossVaultProposal(proposal_id))
+}
+
+pub fn set_cross_vault_proposal(env: &Env, proposal_id: u64, proposal: &CrossVaultProposal) {
+    let key = DataKey::CrossVaultProposal(proposal_id);
+    env.storage().persistent().set(&key, proposal);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, PROPOSAL_TTL / 2, PROPOSAL_TTL);
+}
+
+// ============================================================================
+// Dispute Resolution (Issue: feature/dispute-resolution)
+// ============================================================================
+
+pub fn get_arbitrators(env: &Env) -> Vec<Address> {
+    env.storage()
+        .instance()
+        .get(&DataKey::Arbitrators)
+        .unwrap_or_else(|| Vec::new(env))
+}
+
+pub fn set_arbitrators(env: &Env, arbitrators: &Vec<Address>) {
+    env.storage()
+        .instance()
+        .set(&DataKey::Arbitrators, arbitrators);
+}
+
+pub fn get_next_dispute_id(env: &Env) -> u64 {
+    env.storage()
+        .instance()
+        .get(&DataKey::NextDisputeId)
+        .unwrap_or(1)
+}
+
+pub fn increment_dispute_id(env: &Env) -> u64 {
+    let id = get_next_dispute_id(env);
+    env.storage()
+        .instance()
+        .set(&DataKey::NextDisputeId, &(id + 1));
+    id
+}
+
+pub fn get_dispute(env: &Env, id: u64) -> Option<Dispute> {
+    env.storage().persistent().get(&DataKey::Dispute(id))
+}
+
+pub fn set_dispute(env: &Env, dispute: &Dispute) {
+    let key = DataKey::Dispute(dispute.id);
+    env.storage().persistent().set(&key, dispute);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, PROPOSAL_TTL / 2, PROPOSAL_TTL);
+}
+
+pub fn get_proposal_dispute(env: &Env, proposal_id: u64) -> Option<u64> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::ProposalDispute(proposal_id))
+}
+
+pub fn set_proposal_dispute(env: &Env, proposal_id: u64, dispute_id: u64) {
+    let key = DataKey::ProposalDispute(proposal_id);
+    env.storage().persistent().set(&key, &dispute_id);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, PROPOSAL_TTL / 2, PROPOSAL_TTL);
 }

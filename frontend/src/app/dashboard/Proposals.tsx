@@ -10,6 +10,8 @@ import ProposalFilters, { type FilterState } from '../../components/proposals/Pr
 import { useToast } from '../../hooks/useToast';
 import { useVaultContract } from '../../hooks/useVaultContract';
 import { useWallet } from '../../context/WalletContextProps';
+import type { TokenInfo, TokenBalance } from '../../types';
+import { DEFAULT_TOKENS } from '../../constants/tokens';
 
 const CopyButton = ({ text }: { text: string }) => (
   <button
@@ -51,7 +53,7 @@ export interface Proposal {
 
 const Proposals: React.FC = () => {
   const { notify } = useToast();
-  const { rejectProposal, approveProposal } = useVaultContract();
+  const { rejectProposal, approveProposal, getTokenBalances } = useVaultContract();
   const { address } = useWallet();
 
   const [proposals, setProposals] = useState<Proposal[]>([]);
@@ -61,6 +63,7 @@ const Proposals: React.FC = () => {
   const [selectedProposal, setSelectedProposal] = useState<Proposal | null>(null);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [tokenBalances, setTokenBalances] = useState<TokenBalance[]>([]);
 
   const [activeFilters, setActiveFilters] = useState<FilterState>({
     search: '',
@@ -76,6 +79,26 @@ const Proposals: React.FC = () => {
     amount: '',
     memo: '',
   });
+  const [selectedToken, setSelectedToken] = useState<TokenInfo | null>(null);
+
+  // Fetch token balances
+  useEffect(() => {
+    const fetchBalances = async () => {
+      try {
+        const balances = await getTokenBalances();
+        setTokenBalances(balances.map((b: TokenBalance) => ({ ...b, isLoading: false })));
+      } catch (error) {
+        console.error('Failed to fetch token balances:', error);
+        // Set default tokens with zero balances
+        setTokenBalances(DEFAULT_TOKENS.map(token => ({
+          token,
+          balance: '0',
+          isLoading: false,
+        })));
+      }
+    };
+    fetchBalances();
+  }, [getTokenBalances]);
 
   useEffect(() => {
     const fetchProposals = async () => {
@@ -243,6 +266,18 @@ const Proposals: React.FC = () => {
       });
     }
   };
+
+  // Initialize selected token when tokenBalances load
+  useEffect(() => {
+    if (!selectedToken && tokenBalances.length > 0) {
+      const xlmToken = tokenBalances.find(tb => tb.token.address === 'NATIVE');
+      if (xlmToken) {
+        setSelectedToken(xlmToken.token);
+      } else {
+        setSelectedToken(tokenBalances[0].token);
+      }
+    }
+  }, [selectedToken, tokenBalances]);
 
   return (
     <div className="min-h-screen bg-gray-900 p-6 text-white">
