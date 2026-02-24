@@ -17,6 +17,7 @@ import {
   Files,
   RefreshCw,
   AlertCircle,
+  Bell,
 } from "lucide-react";
 // Fixed Import: Pointing to the actual hook location
 import { useWallet } from "../../hooks/useWallet";
@@ -24,12 +25,16 @@ import type { WalletAdapter } from "../../adapters";
 import { WalletSwitcher } from "../WalletSwitcher";
 import CopyButton from '../CopyButton';
 import { LayoutErrorBoundary } from '../ErrorHandler';
+import NotificationCenter from '../NotificationCenter';
+import { useNotifications } from '../../context/NotificationContext';
 
 const DashboardLayout: React.FC = () => {
   const { isConnected, address, network, connect, disconnect, availableWallets, selectedWalletId, switchWallet } = useWallet();
+  const { unreadCount } = useNotifications();
   const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false);
 
   const shortenAddress = (addr: string, chars = 4) => {
     return `${addr.slice(0, chars)}...${addr.slice(-chars)}`;
@@ -87,6 +92,20 @@ const DashboardLayout: React.FC = () => {
             <p className="text-gray-400 text-sm font-medium">Welcome back to VaultDAO</p>
           </div>
           <div className="flex items-center space-x-4">
+            {/* Notification Bell */}
+            <button
+              onClick={() => setIsNotificationCenterOpen(true)}
+              className="relative p-2 hover:bg-gray-700/50 rounded-lg transition-colors"
+              aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ''}`}
+            >
+              <Bell size={20} className="text-gray-400 hover:text-white transition-colors" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-purple-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </button>
+
             {isConnected && address ? (
               <div className="relative">
                 <button onClick={() => setIsUserMenuOpen(!isUserMenuOpen)} className="flex items-center space-x-3 bg-gray-800 border border-gray-700 hover:border-purple-500/50 px-3 py-2 md:px-4 rounded-xl transition-all duration-200">
@@ -152,6 +171,12 @@ const DashboardLayout: React.FC = () => {
           </LayoutErrorBoundary>
         </main>
       </div>
+
+      {/* Notification Center */}
+      <NotificationCenter
+        isOpen={isNotificationCenterOpen}
+        onClose={() => setIsNotificationCenterOpen(false)}
+      />
     </div>
   );
 };
