@@ -2,8 +2,8 @@
 
 use super::*;
 use crate::types::{
-    CrossVaultConfig, CrossVaultStatus, DexConfig, RetryConfig, SwapProposal, TimeBasedThreshold,
-    TransferDetails, VaultAction, VelocityConfig,
+    CrossVaultConfig, CrossVaultStatus, DexConfig, DisputeResolution, DisputeStatus, RetryConfig,
+    SwapProposal, TimeBasedThreshold, TransferDetails, VaultAction, VelocityConfig,
 };
 use crate::{InitConfig, VaultDAO, VaultDAOClient};
 use soroban_sdk::{
@@ -3734,6 +3734,86 @@ fn setup_cross_vault_env() -> (Env, Address, Address, Address, Address, Address,
     )
 }
 
+// ============================================================================
+// Dispute Resolution Tests
+// ============================================================================
+
+/// Helper: set up a vault with signers, arbitrators, and a pending proposal.
+/// Returns (env, client, admin, signer1, signer2, arbitrator, proposal_id)
+fn setup_dispute_env() -> (Env, Address, Address, Address, Address, Address, u64) {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let signer1 = Address::generate(&env);
+    let signer2 = Address::generate(&env);
+    let arbitrator = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let token = Address::generate(&env);
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    signers.push_back(signer1.clone());
+    signers.push_back(signer2.clone());
+
+    let config = InitConfig {
+        signers,
+        threshold: 2,
+        quorum: 0,
+        spending_limit: 10_000,
+        daily_limit: 50_000,
+        weekly_limit: 100_000,
+        timelock_threshold: 50_000,
+        timelock_delay: 100,
+        velocity_limit: VelocityConfig {
+            limit: 100,
+            window: 3600,
+        },
+        threshold_strategy: ThresholdStrategy::Fixed,
+        default_voting_deadline: 0,
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
+    };
+
+    client.initialize(&admin, &config);
+    client.set_role(&admin, &signer1, &Role::Treasurer);
+    client.set_role(&admin, &signer2, &Role::Treasurer);
+
+    // Set arbitrators
+    let mut arbs = Vec::new(&env);
+    arbs.push_back(arbitrator.clone());
+    client.set_arbitrators(&admin, &arbs);
+
+    // Create a pending proposal
+    let proposal_id = client.propose_transfer(
+        &signer1,
+        &recipient,
+        &token,
+        &500,
+        &Symbol::new(&env, "test"),
+        &Priority::Normal,
+        &Vec::new(&env),
+        &ConditionLogic::And,
+        &0i128,
+    );
+
+    (
+        env,
+        contract_id,
+        admin,
+        signer1,
+        signer2,
+        arbitrator,
+        proposal_id,
+    )
+}
+
 #[test]
 fn test_cross_vault_single_action_success() {
     let (env, coordinator_id, participant_id, admin, signer1, signer2, token_addr) =
@@ -4339,4 +4419,276 @@ fn test_cross_vault_full_multisig_flow() {
 
     let token_client = soroban_sdk::token::Client::new(&env, &token_addr);
     assert_eq!(token_client.balance(&recipient), 1_000);
+}
+
+#[test]
+fn test_dispute_file_and_query() {
+    let (env, contract_id, _admin, signer1, _signer2, _arbitrator, proposal_id) =
+        setup_dispute_env();
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    // File dispute
+    let dispute_id = client.file_dispute(
+        &signer1,
+        &proposal_id,
+        &Symbol::new(&env, "unfair"),
+        &Vec::new(&env),
+    );
+
+    // Query dispute
+    let dispute = client.get_dispute(&dispute_id).unwrap();
+    assert_eq!(dispute.id, dispute_id);
+    assert_eq!(dispute.proposal_id, proposal_id);
+    assert_eq!(dispute.disputer, signer1);
+    assert_eq!(dispute.status, DisputeStatus::Filed);
+
+    // Query by proposal
+    let linked_dispute_id = client.get_proposal_dispute(&proposal_id).unwrap();
+    assert_eq!(linked_dispute_id, dispute_id);
+}
+
+#[test]
+fn test_dispute_resolve_in_favor_of_disputer() {
+    let (env, contract_id, _admin, signer1, _signer2, arbitrator, proposal_id) =
+        setup_dispute_env();
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let dispute_id = client.file_dispute(
+        &signer1,
+        &proposal_id,
+        &Symbol::new(&env, "unfair"),
+        &Vec::new(&env),
+    );
+
+    // Arbitrator resolves in favor of disputer -> proposal rejected
+    client.resolve_dispute(
+        &arbitrator,
+        &dispute_id,
+        &DisputeResolution::InFavorOfDisputer,
+    );
+
+    // Check dispute resolved
+    let dispute = client.get_dispute(&dispute_id).unwrap();
+    assert_eq!(dispute.status, DisputeStatus::Resolved);
+    assert_eq!(dispute.resolution, DisputeResolution::InFavorOfDisputer);
+    assert_eq!(dispute.arbitrator, arbitrator);
+
+    // Check proposal was rejected
+    let proposal = client.get_proposal(&proposal_id);
+    assert_eq!(proposal.status, ProposalStatus::Rejected);
+}
+
+#[test]
+fn test_dispute_resolve_in_favor_of_proposer() {
+    let (env, contract_id, _admin, signer1, _signer2, arbitrator, proposal_id) =
+        setup_dispute_env();
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let dispute_id = client.file_dispute(
+        &signer1,
+        &proposal_id,
+        &Symbol::new(&env, "concern"),
+        &Vec::new(&env),
+    );
+
+    // Arbitrator resolves in favor of proposer -> proposal unaffected
+    client.resolve_dispute(
+        &arbitrator,
+        &dispute_id,
+        &DisputeResolution::InFavorOfProposer,
+    );
+
+    let dispute = client.get_dispute(&dispute_id).unwrap();
+    assert_eq!(dispute.status, DisputeStatus::Resolved);
+    assert_eq!(dispute.resolution, DisputeResolution::InFavorOfProposer);
+
+    // Proposal should still be Pending
+    let proposal = client.get_proposal(&proposal_id);
+    assert_eq!(proposal.status, ProposalStatus::Pending);
+}
+
+#[test]
+fn test_dispute_dismiss() {
+    let (env, contract_id, _admin, signer1, _signer2, arbitrator, proposal_id) =
+        setup_dispute_env();
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let dispute_id = client.file_dispute(
+        &signer1,
+        &proposal_id,
+        &Symbol::new(&env, "invalid"),
+        &Vec::new(&env),
+    );
+
+    client.resolve_dispute(&arbitrator, &dispute_id, &DisputeResolution::Dismissed);
+
+    let dispute = client.get_dispute(&dispute_id).unwrap();
+    assert_eq!(dispute.status, DisputeStatus::Dismissed);
+    assert_eq!(dispute.resolution, DisputeResolution::Dismissed);
+
+    // Proposal unaffected
+    let proposal = client.get_proposal(&proposal_id);
+    assert_eq!(proposal.status, ProposalStatus::Pending);
+}
+
+#[test]
+fn test_dispute_non_arbitrator_cannot_resolve() {
+    let (env, contract_id, _admin, signer1, signer2, _arbitrator, proposal_id) =
+        setup_dispute_env();
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let dispute_id = client.file_dispute(
+        &signer1,
+        &proposal_id,
+        &Symbol::new(&env, "unfair"),
+        &Vec::new(&env),
+    );
+
+    // signer2 is NOT an arbitrator — should fail
+    let result =
+        client.try_resolve_dispute(&signer2, &dispute_id, &DisputeResolution::InFavorOfDisputer);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_dispute_duplicate_rejected() {
+    let (env, contract_id, _admin, signer1, signer2, _arbitrator, proposal_id) =
+        setup_dispute_env();
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    // First dispute succeeds
+    client.file_dispute(
+        &signer1,
+        &proposal_id,
+        &Symbol::new(&env, "first"),
+        &Vec::new(&env),
+    );
+
+    // Second dispute on same proposal should fail
+    let result = client.try_file_dispute(
+        &signer2,
+        &proposal_id,
+        &Symbol::new(&env, "second"),
+        &Vec::new(&env),
+    );
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_dispute_non_signer_cannot_file() {
+    let (env, contract_id, _admin, _signer1, _signer2, _arbitrator, proposal_id) =
+        setup_dispute_env();
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let outsider = Address::generate(&env);
+
+    let result = client.try_file_dispute(
+        &outsider,
+        &proposal_id,
+        &Symbol::new(&env, "outsider"),
+        &Vec::new(&env),
+    );
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_dispute_already_resolved_cannot_resolve_again() {
+    let (env, contract_id, _admin, signer1, _signer2, arbitrator, proposal_id) =
+        setup_dispute_env();
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let dispute_id = client.file_dispute(
+        &signer1,
+        &proposal_id,
+        &Symbol::new(&env, "unfair"),
+        &Vec::new(&env),
+    );
+
+    // First resolution succeeds
+    client.resolve_dispute(
+        &arbitrator,
+        &dispute_id,
+        &DisputeResolution::InFavorOfProposer,
+    );
+
+    // Second resolution on same dispute should fail
+    let result = client.try_resolve_dispute(
+        &arbitrator,
+        &dispute_id,
+        &DisputeResolution::InFavorOfDisputer,
+    );
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_dispute_with_evidence() {
+    let (env, contract_id, _admin, signer1, _signer2, _arbitrator, proposal_id) =
+        setup_dispute_env();
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let mut evidence = Vec::new(&env);
+    evidence.push_back(String::from_str(&env, "QmHash1"));
+    evidence.push_back(String::from_str(&env, "QmHash2"));
+
+    let dispute_id = client.file_dispute(
+        &signer1,
+        &proposal_id,
+        &Symbol::new(&env, "evidence"),
+        &evidence,
+    );
+
+    let dispute = client.get_dispute(&dispute_id).unwrap();
+    assert_eq!(dispute.evidence.len(), 2);
+}
+
+#[test]
+fn test_set_and_get_arbitrators() {
+    let (env, contract_id, admin, _signer1, _signer2, arbitrator, _proposal_id) =
+        setup_dispute_env();
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    // Verify initial arbitrators
+    let arbs = client.get_arbitrators();
+    assert_eq!(arbs.len(), 1);
+    assert_eq!(arbs.get(0).unwrap(), arbitrator);
+
+    // Update to multiple arbitrators
+    let arb2 = Address::generate(&env);
+    let mut new_arbs = Vec::new(&env);
+    new_arbs.push_back(arbitrator.clone());
+    new_arbs.push_back(arb2.clone());
+    client.set_arbitrators(&admin, &new_arbs);
+
+    let arbs = client.get_arbitrators();
+    assert_eq!(arbs.len(), 2);
+}
+
+#[test]
+fn test_dispute_on_approved_proposal() {
+    let (env, contract_id, _admin, signer1, signer2, arbitrator, proposal_id) = setup_dispute_env();
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    // Approve the proposal first (2-of-3)
+    client.approve_proposal(&signer1, &proposal_id);
+    client.approve_proposal(&signer2, &proposal_id);
+    let proposal = client.get_proposal(&proposal_id);
+    assert_eq!(proposal.status, ProposalStatus::Approved);
+
+    // File dispute on approved proposal — should succeed
+    let dispute_id = client.file_dispute(
+        &signer1,
+        &proposal_id,
+        &Symbol::new(&env, "dispute"),
+        &Vec::new(&env),
+    );
+
+    // Resolve in favor of disputer -> proposal rejected
+    client.resolve_dispute(
+        &arbitrator,
+        &dispute_id,
+        &DisputeResolution::InFavorOfDisputer,
+    );
+
+    let proposal = client.get_proposal(&proposal_id);
+    assert_eq!(proposal.status, ProposalStatus::Rejected);
 }

@@ -20,9 +20,9 @@ use errors::VaultError;
 use soroban_sdk::{contract, contractimpl, Address, Env, Map, String, Symbol, Vec};
 use types::{
     Comment, Condition, ConditionLogic, Config, CrossVaultConfig, CrossVaultProposal,
-    CrossVaultStatus, GasConfig, InsuranceConfig, ListMode, NotificationPreferences, Priority,
-    Proposal, ProposalStatus, Reputation, RetryConfig, RetryState, Role, ThresholdStrategy,
-    VaultAction, VaultMetrics,
+    CrossVaultStatus, Dispute, DisputeResolution, DisputeStatus, GasConfig, InsuranceConfig,
+    ListMode, NotificationPreferences, Priority, Proposal, ProposalStatus, Reputation, RetryConfig,
+    RetryState, Role, ThresholdStrategy, VaultAction, VaultMetrics,
 };
 
 /// The main contract structure for VaultDAO.
@@ -3045,6 +3045,182 @@ impl VaultDAO {
     /// Query a cross-vault proposal by its proposal ID.
     pub fn get_cross_vault_proposal(env: Env, proposal_id: u64) -> Option<CrossVaultProposal> {
         storage::get_cross_vault_proposal(&env, proposal_id)
+    }
+
+    // ========================================================================
+    // Dispute Resolution (Issue: feature/dispute-resolution)
+    // ========================================================================
+
+    /// Set the list of arbitrator addresses authorized to resolve disputes.
+    ///
+    /// Only Admin can configure arbitrators.
+    pub fn set_arbitrators(
+        env: Env,
+        admin: Address,
+        arbitrators: Vec<Address>,
+    ) -> Result<(), VaultError> {
+        admin.require_auth();
+        let role = storage::get_role(&env, &admin);
+        if role != Role::Admin {
+            return Err(VaultError::Unauthorized);
+        }
+
+        storage::set_arbitrators(&env, &arbitrators);
+        storage::extend_instance_ttl(&env);
+        events::emit_arbitrators_updated(&env, &admin, arbitrators.len());
+        Ok(())
+    }
+
+    /// Query the current list of arbitrators.
+    pub fn get_arbitrators(env: Env) -> Vec<Address> {
+        storage::get_arbitrators(&env)
+    }
+
+    /// File a dispute against a pending or approved proposal.
+    ///
+    /// Any signer can file a dispute. The proposal must be in Pending or
+    /// Approved status (cannot dispute already-executed or cancelled proposals).
+    /// Only one dispute per proposal is allowed.
+    pub fn file_dispute(
+        env: Env,
+        disputer: Address,
+        proposal_id: u64,
+        reason: Symbol,
+        evidence: Vec<String>,
+    ) -> Result<u64, VaultError> {
+        disputer.require_auth();
+
+        // Must be a signer
+        let config = storage::get_config(&env)?;
+        if !config.signers.contains(&disputer) {
+            return Err(VaultError::NotASigner);
+        }
+
+        // Check proposal exists and is disputable
+        let proposal = storage::get_proposal(&env, proposal_id)?;
+        if proposal.status != ProposalStatus::Pending && proposal.status != ProposalStatus::Approved
+        {
+            return Err(VaultError::ProposalNotPending);
+        }
+
+        // Only one dispute per proposal
+        if storage::get_proposal_dispute(&env, proposal_id).is_some() {
+            return Err(VaultError::AlreadyApproved); // reuse: already acted on
+        }
+
+        let dispute_id = storage::increment_dispute_id(&env);
+        let current_ledger = env.ledger().sequence() as u64;
+
+        let dispute = Dispute {
+            id: dispute_id,
+            proposal_id,
+            disputer: disputer.clone(),
+            reason,
+            evidence,
+            status: DisputeStatus::Filed,
+            resolution: DisputeResolution::Dismissed, // placeholder until resolved
+            arbitrator: disputer.clone(),             // placeholder until resolved
+            filed_at: current_ledger,
+            resolved_at: 0,
+        };
+
+        storage::set_dispute(&env, &dispute);
+        storage::set_proposal_dispute(&env, proposal_id, dispute_id);
+        storage::extend_instance_ttl(&env);
+
+        events::emit_dispute_filed(&env, dispute_id, proposal_id, &disputer);
+
+        Ok(dispute_id)
+    }
+
+    /// Resolve a dispute as a designated arbitrator.
+    ///
+    /// The arbitrator must be in the configured arbitrator list.
+    /// Resolution outcomes:
+    /// - `InFavorOfProposer` (0): proposal proceeds, dispute dismissed
+    /// - `InFavorOfDisputer` (1): proposal is rejected
+    /// - `Compromise` (2): dispute resolved, proposal remains in current state
+    /// - `Dismissed` (3): dispute dismissed as invalid
+    pub fn resolve_dispute(
+        env: Env,
+        arbitrator: Address,
+        dispute_id: u64,
+        resolution: DisputeResolution,
+    ) -> Result<(), VaultError> {
+        arbitrator.require_auth();
+
+        // Must be a designated arbitrator
+        let arbitrators = storage::get_arbitrators(&env);
+        if !arbitrators.contains(&arbitrator) {
+            return Err(VaultError::Unauthorized);
+        }
+
+        // Load dispute
+        let mut dispute =
+            storage::get_dispute(&env, dispute_id).ok_or(VaultError::ProposalNotFound)?;
+
+        // Must be in Filed or UnderReview status
+        if dispute.status == DisputeStatus::Resolved || dispute.status == DisputeStatus::Dismissed {
+            return Err(VaultError::ProposalAlreadyExecuted); // reuse: already finalized
+        }
+
+        let current_ledger = env.ledger().sequence() as u64;
+
+        // Apply resolution effects on the proposal
+        match resolution {
+            DisputeResolution::InFavorOfDisputer => {
+                // Reject the disputed proposal
+                let mut proposal = storage::get_proposal(&env, dispute.proposal_id)?;
+                if proposal.status == ProposalStatus::Pending
+                    || proposal.status == ProposalStatus::Approved
+                {
+                    proposal.status = ProposalStatus::Rejected;
+                    storage::set_proposal(&env, &proposal);
+                    storage::metrics_on_rejection(&env);
+                    events::emit_proposal_rejected(
+                        &env,
+                        dispute.proposal_id,
+                        &arbitrator,
+                        &proposal.proposer,
+                    );
+                }
+            }
+            _ => {
+                // InFavorOfProposer, Compromise, Dismissed: proposal unaffected
+            }
+        }
+
+        // Update dispute record
+        dispute.status = match resolution {
+            DisputeResolution::Dismissed => DisputeStatus::Dismissed,
+            _ => DisputeStatus::Resolved,
+        };
+        dispute.resolution = resolution.clone();
+        dispute.arbitrator = arbitrator.clone();
+        dispute.resolved_at = current_ledger;
+
+        storage::set_dispute(&env, &dispute);
+        storage::extend_instance_ttl(&env);
+
+        events::emit_dispute_resolved(
+            &env,
+            dispute_id,
+            dispute.proposal_id,
+            &arbitrator,
+            resolution as u32,
+        );
+
+        Ok(())
+    }
+
+    /// Query a dispute by its ID.
+    pub fn get_dispute(env: Env, dispute_id: u64) -> Option<Dispute> {
+        storage::get_dispute(&env, dispute_id)
+    }
+
+    /// Query the dispute ID associated with a proposal (if any).
+    pub fn get_proposal_dispute(env: Env, proposal_id: u64) -> Option<u64> {
+        storage::get_proposal_dispute(&env, proposal_id)
     }
 
     // ========================================================================
