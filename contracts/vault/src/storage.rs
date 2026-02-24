@@ -6,8 +6,9 @@ use soroban_sdk::{contracttype, Address, Env, String, Vec};
 
 use crate::errors::VaultError;
 use crate::types::{
-    Comment, Config, GasConfig, InsuranceConfig, ListMode, NotificationPreferences, Proposal,
-    Reputation, RetryState, Role, VaultMetrics, VelocityConfig,
+    Comment, Config, CrossVaultConfig, CrossVaultProposal, Dispute, GasConfig, InsuranceConfig,
+    ListMode, NotificationPreferences, Proposal, Reputation, RetryState, Role, VaultMetrics,
+    VelocityConfig,
 };
 
 /// Storage key definitions
@@ -72,14 +73,18 @@ pub enum DataKey {
     Metrics,
     /// Retry state for a proposal -> RetryState
     RetryState(u64),
-    /// Active delegation for an address -> Delegation
-    Delegation(Address),
-    /// Delegation history entry by ID -> DelegationHistory
-    DelegationHistoryEntry(u64),
-    /// Next delegation history ID counter -> u64
-    NextDelegationHistoryId,
-    /// All delegation history IDs for an address -> Vec<u64>
-    DelegationHistoryByAddress(Address),
+    /// Cross-vault proposal by ID -> CrossVaultProposal
+    CrossVaultProposal(u64),
+    /// Cross-vault configuration -> CrossVaultConfig
+    CrossVaultConfig,
+    /// Dispute by ID -> Dispute
+    Dispute(u64),
+    /// Dispute ID for a proposal -> u64
+    ProposalDispute(u64),
+    /// Next dispute ID counter -> u64
+    NextDisputeId,
+    /// Arbitrator addresses -> Vec<Address>
+    Arbitrators,
 }
 
 /// TTL constants (in ledgers, ~5 seconds each)
@@ -749,117 +754,87 @@ pub fn set_retry_state(env: &Env, proposal_id: u64, state: &RetryState) {
 }
 
 // ============================================================================
-// Delegation System (Issue: feature/proposal-delegation)
+// Cross-Vault Coordination (Issue: feature/cross-vault-coordination)
 // ============================================================================
 
-use crate::types::{Delegation, DelegationHistory};
-
-/// Get active delegation for an address
-pub fn get_delegation(env: &Env, delegator: &Address) -> Option<Delegation> {
-    let key = DataKey::Delegation(delegator.clone());
-    env.storage().persistent().get(&key)
+pub fn get_cross_vault_config(env: &Env) -> Option<CrossVaultConfig> {
+    env.storage().instance().get(&DataKey::CrossVaultConfig)
 }
 
-/// Set or update delegation for an address
-pub fn set_delegation(env: &Env, delegation: &Delegation) {
-    let key = DataKey::Delegation(delegation.delegator.clone());
-    env.storage().persistent().set(&key, delegation);
-    env.storage()
-        .persistent()
-        .extend_ttl(&key, INSTANCE_TTL_THRESHOLD, INSTANCE_TTL);
-}
-
-/// Remove delegation for an address
-pub fn remove_delegation(env: &Env, delegator: &Address) {
-    env.storage()
-        .persistent()
-        .remove(&DataKey::Delegation(delegator.clone()));
-}
-
-/// Get next delegation history ID
-pub fn get_next_delegation_history_id(env: &Env) -> u64 {
+pub fn set_cross_vault_config(env: &Env, config: &CrossVaultConfig) {
     env.storage()
         .instance()
-        .get(&DataKey::NextDelegationHistoryId)
+        .set(&DataKey::CrossVaultConfig, config);
+}
+
+pub fn get_cross_vault_proposal(env: &Env, proposal_id: u64) -> Option<CrossVaultProposal> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::CrossVaultProposal(proposal_id))
+}
+
+pub fn set_cross_vault_proposal(env: &Env, proposal_id: u64, proposal: &CrossVaultProposal) {
+    let key = DataKey::CrossVaultProposal(proposal_id);
+    env.storage().persistent().set(&key, proposal);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, PROPOSAL_TTL / 2, PROPOSAL_TTL);
+}
+
+// ============================================================================
+// Dispute Resolution (Issue: feature/dispute-resolution)
+// ============================================================================
+
+pub fn get_arbitrators(env: &Env) -> Vec<Address> {
+    env.storage()
+        .instance()
+        .get(&DataKey::Arbitrators)
+        .unwrap_or_else(|| Vec::new(env))
+}
+
+pub fn set_arbitrators(env: &Env, arbitrators: &Vec<Address>) {
+    env.storage()
+        .instance()
+        .set(&DataKey::Arbitrators, arbitrators);
+}
+
+pub fn get_next_dispute_id(env: &Env) -> u64 {
+    env.storage()
+        .instance()
+        .get(&DataKey::NextDisputeId)
         .unwrap_or(1)
 }
 
-/// Increment delegation history ID counter
-pub fn increment_delegation_history_id(env: &Env) -> u64 {
-    let id = get_next_delegation_history_id(env);
+pub fn increment_dispute_id(env: &Env) -> u64 {
+    let id = get_next_dispute_id(env);
     env.storage()
         .instance()
-        .set(&DataKey::NextDelegationHistoryId, &(id + 1));
+        .set(&DataKey::NextDisputeId, &(id + 1));
     id
 }
 
-/// Store or update delegation history entry
-pub fn add_delegation_history(env: &Env, history: &DelegationHistory) {
-    let key = DataKey::DelegationHistoryEntry(history.id);
-    env.storage().persistent().set(&key, history);
-    env.storage()
-        .persistent()
-        .extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL);
-
-    // Only add to list if this is a new entry (ended_at == 0 initially)
-    if history.ended_at == 0 {
-        let list_key = DataKey::DelegationHistoryByAddress(history.delegator.clone());
-        let mut history_ids: Vec<u64> = env
-            .storage()
-            .persistent()
-            .get(&list_key)
-            .unwrap_or_else(|| Vec::new(env));
-
-        // Check if already in list
-        let mut found = false;
-        for i in 0..history_ids.len() {
-            if history_ids.get(i).unwrap() == history.id {
-                found = true;
-                break;
-            }
-        }
-
-        if !found {
-            history_ids.push_back(history.id);
-            env.storage().persistent().set(&list_key, &history_ids);
-            env.storage().persistent().extend_ttl(
-                &list_key,
-                PERSISTENT_TTL_THRESHOLD,
-                PERSISTENT_TTL,
-            );
-        }
-    }
+pub fn get_dispute(env: &Env, id: u64) -> Option<Dispute> {
+    env.storage().persistent().get(&DataKey::Dispute(id))
 }
 
-/// Update an existing delegation history entry
-pub fn update_delegation_history(env: &Env, history: &DelegationHistory) {
-    let key = DataKey::DelegationHistoryEntry(history.id);
-    env.storage().persistent().set(&key, history);
+pub fn set_dispute(env: &Env, dispute: &Dispute) {
+    let key = DataKey::Dispute(dispute.id);
+    env.storage().persistent().set(&key, dispute);
     env.storage()
         .persistent()
-        .extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL);
+        .extend_ttl(&key, PROPOSAL_TTL / 2, PROPOSAL_TTL);
 }
 
-/// Get delegation history for an address
-pub fn get_delegation_history(env: &Env, delegator: &Address) -> Vec<DelegationHistory> {
-    let list_key = DataKey::DelegationHistoryByAddress(delegator.clone());
-    let history_ids: Vec<u64> = env
-        .storage()
+pub fn get_proposal_dispute(env: &Env, proposal_id: u64) -> Option<u64> {
+    env.storage()
         .persistent()
-        .get(&list_key)
-        .unwrap_or_else(|| Vec::new(env));
+        .get(&DataKey::ProposalDispute(proposal_id))
+}
 
-    let mut history = Vec::new(env);
-    for i in 0..history_ids.len() {
-        if let Some(id) = history_ids.get(i) {
-            if let Some(entry) = env
-                .storage()
-                .persistent()
-                .get::<DataKey, DelegationHistory>(&DataKey::DelegationHistoryEntry(id))
-            {
-                history.push_back(entry);
-            }
-        }
-    }
-    history
+pub fn set_proposal_dispute(env: &Env, proposal_id: u64, dispute_id: u64) {
+    let key = DataKey::ProposalDispute(proposal_id);
+    env.storage().persistent().set(&key, &dispute_id);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, PROPOSAL_TTL / 2, PROPOSAL_TTL);
 }

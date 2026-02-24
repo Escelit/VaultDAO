@@ -84,14 +84,11 @@ pub enum VaultError {
     // Bridge (consolidated)
     BridgeError = 170, // Generic bridge error - covers NotConfigured, ChainNotSupported, ExceedsBridgeLimit
 
-    // Reputation
-    ReputationTooLow = 180,
+    // Retry errors
+    MaxRetriesExceeded = 190,
+    RetryBackoffNotElapsed = 191,
+    RetryNotEnabled = 192,
 
-    // Retry errors (consolidated)
-    RetryError = 190, // Generic retry error - covers MaxRetriesExceeded, RetryBackoffNotElapsed, RetryNotEnabled
-
-    // Delegation errors
-    DelegationError = 200, // Generic delegation error - covers AlreadyExists, NotFound, Expired
-    CircularDelegation = 201,
-    DelegationChainTooLong = 202,
+    // Cross-vault errors
+    XVaultNotEnabled = 200,
 }

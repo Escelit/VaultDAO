@@ -611,39 +611,121 @@ pub struct RetryState {
 }
 
 // ============================================================================
-// Proposal Delegation (Issue: feature/proposal-delegation)
+// Cross-Vault Proposal Coordination (Issue: feature/cross-vault-coordination)
 // ============================================================================
 
-/// Delegation record for voting power
+/// Status of a cross-vault proposal
 #[contracttype]
-#[derive(Clone, Debug)]
-pub struct Delegation {
-    /// Address delegating their voting power
-    pub delegator: Address,
-    /// Address receiving the voting power
-    pub delegate: Address,
-    /// Ledger when delegation expires (0 = permanent)
-    pub expiry_ledger: u64,
-    /// Whether the delegation is currently active
-    pub is_active: bool,
-    /// Ledger when delegation was created
-    pub created_at: u64,
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum CrossVaultStatus {
+    Pending = 0,
+    Approved = 1,
+    Executed = 2,
+    Failed = 3,
+    Cancelled = 4,
 }
 
-/// Historical delegation record for audit trail
+/// Describes a single action to be executed on a participant vault
 #[contracttype]
 #[derive(Clone, Debug)]
-pub struct DelegationHistory {
-    /// Unique ID for this delegation event
+pub struct VaultAction {
+    /// Address of the participant vault contract
+    pub vault_address: Address,
+    /// Recipient of the transfer from the participant vault
+    pub recipient: Address,
+    /// Token contract address
+    pub token: Address,
+    /// Amount to transfer
+    pub amount: i128,
+    /// Optional memo
+    pub memo: Symbol,
+}
+
+/// Cross-vault proposal stored alongside the base Proposal
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct CrossVaultProposal {
+    /// List of actions to execute across participant vaults
+    pub actions: Vec<VaultAction>,
+    /// Current status of the cross-vault proposal
+    pub status: CrossVaultStatus,
+    /// Per-action execution results (true = success)
+    pub execution_results: Vec<bool>,
+    /// Ledger when executed (0 if not yet executed)
+    pub executed_at: u64,
+}
+
+/// Configuration for cross-vault participation
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct CrossVaultConfig {
+    /// Whether this vault participates in cross-vault operations
+    pub enabled: bool,
+    /// Vault addresses authorized to coordinate actions on this vault
+    pub authorized_coordinators: Vec<Address>,
+    /// Maximum amount per single cross-vault action
+    pub max_action_amount: i128,
+    /// Maximum number of actions in a single cross-vault proposal
+    pub max_actions: u32,
+}
+
+// ============================================================================
+// Dispute Resolution (Issue: feature/dispute-resolution)
+// ============================================================================
+
+/// Lifecycle status of a dispute
+#[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum DisputeStatus {
+    /// Dispute has been filed, awaiting arbitrator review
+    Filed = 0,
+    /// Arbitrator is actively reviewing the dispute
+    UnderReview = 1,
+    /// Dispute has been resolved by an arbitrator
+    Resolved = 2,
+    /// Dispute was dismissed by an arbitrator
+    Dismissed = 3,
+}
+
+/// Outcome of a dispute resolution
+#[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum DisputeResolution {
+    /// Ruling in favor of the original proposer (proposal proceeds)
+    InFavorOfProposer = 0,
+    /// Ruling in favor of the disputer (proposal rejected)
+    InFavorOfDisputer = 1,
+    /// Compromise reached (proposal modified or partially executed)
+    Compromise = 2,
+    /// Dispute dismissed as invalid
+    Dismissed = 3,
+}
+
+/// On-chain dispute record for a contested proposal
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct Dispute {
+    /// Unique dispute ID
     pub id: u64,
-    /// Address delegating their voting power
-    pub delegator: Address,
-    /// Address receiving the voting power
-    pub delegate: Address,
-    /// Ledger when delegation was created
-    pub created_at: u64,
-    /// Ledger when delegation expired or was revoked (0 = still active)
-    pub ended_at: u64,
-    /// Whether this was a revocation (true) or natural expiry (false)
-    pub was_revoked: bool,
+    /// ID of the disputed proposal
+    pub proposal_id: u64,
+    /// Address that filed the dispute
+    pub disputer: Address,
+    /// Short reason for the dispute
+    pub reason: Symbol,
+    /// IPFS hashes or on-chain references to supporting evidence
+    pub evidence: Vec<String>,
+    /// Current status
+    pub status: DisputeStatus,
+    /// Resolution outcome (only set when status is Resolved or Dismissed)
+    pub resolution: DisputeResolution,
+    /// Arbitrator who resolved the dispute (zero-value until resolved)
+    pub arbitrator: Address,
+    /// Ledger when dispute was filed
+    pub filed_at: u64,
+    /// Ledger when dispute was resolved (0 if unresolved)
+    pub resolved_at: u64,
 }
