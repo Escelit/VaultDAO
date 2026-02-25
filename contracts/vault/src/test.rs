@@ -2,8 +2,8 @@
 
 use super::*;
 use crate::types::{
-    DexConfig, ExecutionFeeEstimate, RetryConfig, StreamStatus, SubscriptionStatus,
-    SubscriptionTier, SwapProposal, TimeBasedThreshold, TransferDetails, VelocityConfig,
+    DexConfig, RetryConfig, StreamStatus, SubscriptionStatus, SubscriptionTier, SwapProposal,
+    TimeBasedThreshold, TransferDetails, VelocityConfig,
 };
 use crate::{InitConfig, VaultDAO, VaultDAOClient};
 use soroban_sdk::{

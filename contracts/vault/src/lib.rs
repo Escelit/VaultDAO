@@ -19,15 +19,14 @@ pub use types::InitConfig;
 use errors::VaultError;
 use soroban_sdk::{contract, contractimpl, Address, Env, Map, String, Symbol, Vec};
 use types::{
-    AmountTier, BatchExecutionResult, BatchOperation, BatchStatus, BatchTransaction, BridgeConfig,
-    CancellationRecord, ChainConfirmation, ChainId, Comment, Condition, ConditionLogic, Config,
-    CrossChainAsset, CrossChainProposal, CrossChainTransferParams, DexConfig, Escrow, EscrowStatus,
+    BatchExecutionResult, BatchOperation, BatchStatus, BatchTransaction, CancellationRecord,
+    Comment, Condition, ConditionLogic, Config, DexConfig, Escrow, EscrowStatus,
     ExecutionFeeEstimate, GasConfig, InsuranceConfig, ListMode, Milestone, NotificationPreferences,
     Priority, Proposal, ProposalAmendment, ProposalStatus, ProposalTemplate, RecoveryConfig,
     RecoveryProposal, RecoveryStatus, RecurringPayment, Reputation, RetryConfig, RetryState, Role,
     StreamStatus, StreamingPayment, Subscription, SubscriptionPayment, SubscriptionStatus,
     SubscriptionTier, SwapProposal, SwapResult, TemplateOverrides, ThresholdStrategy,
-    TimeBasedThreshold, TransferDetails, VaultMetrics, VelocityConfig,
+    TransferDetails, VaultMetrics,
 };
 
 /// The main contract structure for VaultDAO.
