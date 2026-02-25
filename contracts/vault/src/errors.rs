@@ -60,9 +60,6 @@ pub enum VaultError {
     AddressAlreadyOnList = 92,
     AddressNotOnList = 93,
 
-    // Comments
-    NotCommentAuthor = 100,
-
     // Insurance
     InsuranceInsufficient = 110,
 
@@ -78,23 +75,24 @@ pub enum VaultError {
     // Recurring payments
     IntervalTooShort = 150,
 
-    // DEX/AMM (consolidated)
-    DexError = 160, // Generic DEX error - covers NotEnabled, SlippageExceeded, PriceImpactExceeded, InvalidSwapParams, InsufficientLiquidity
+    // DEX/AMM - consolidated
+    DexNotEnabled = 160,
+    DexOperationFailed = 161, // Consolidates SlippageExceeded, PriceImpactExceeded, InvalidSwapParams, InsufficientLiquidity
 
-    // Bridge (consolidated)
-    BridgeError = 170, // Generic bridge error - covers NotConfigured, ChainNotSupported, ExceedsBridgeLimit
+    // Bridge - consolidated
+    BridgeError = 165, // Consolidates BridgeNotConfigured, ChainNotSupported, ExceedsBridgeLimit
 
-    // Retry errors
-    MaxRetriesExceeded = 190,
-    RetryBackoffNotElapsed = 191,
-    RetryNotEnabled = 192,
-    RetryError = 193,
+    // Retry errors - consolidated
+    RetryError = 168, // Consolidates MaxRetriesExceeded, RetryBackoffNotElapsed, RetryNotEnabled
 
     // Cross-vault errors
     XVaultNotEnabled = 200,
 
-    // Delegation errors
-    DelegationError = 210,
-    CircularDelegation = 211,
-    DelegationChainTooLong = 212,
+    // Quorum runtime checks
+    QuorumNotReached = 8,
+
+    // Template errors
+    TemplateNotFound = 210,
+    TemplateInactive = 211,
+    TemplateValidationFailed = 212,
 }
