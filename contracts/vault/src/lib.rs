@@ -232,7 +232,7 @@ impl VaultDAO {
 
         // 3. Check permission
         if !Self::check_permission(&env, &proposer, &types::Permission::CreateProposal) {
-            return Err(VaultError::PermissionDenied);
+            return Err(VaultError::Unauthorized);
         }
 
         // 4. Validate recipient against lists
@@ -635,7 +635,7 @@ impl VaultDAO {
 
         // Check permission
         if !Self::check_permission(&env, &signer, &types::Permission::ApproveProposal) {
-            return Err(VaultError::PermissionDenied);
+            return Err(VaultError::Unauthorized);
         }
 
         // Get proposal
@@ -1150,7 +1150,7 @@ impl VaultDAO {
         admin.require_auth();
 
         if !Self::check_permission(&env, &admin, &types::Permission::ManageRoles) {
-            return Err(VaultError::PermissionDenied);
+            return Err(VaultError::Unauthorized);
         }
 
         storage::set_role(&env, &target, role.clone());
@@ -1168,7 +1168,7 @@ impl VaultDAO {
         admin.require_auth();
 
         if !Self::check_permission(&env, &admin, &types::Permission::ManageSigners) {
-            return Err(VaultError::PermissionDenied);
+            return Err(VaultError::Unauthorized);
         }
 
         let mut config = storage::get_config(&env)?;
@@ -1194,7 +1194,7 @@ impl VaultDAO {
         admin.require_auth();
 
         if !Self::check_permission(&env, &admin, &types::Permission::ManageSigners) {
-            return Err(VaultError::PermissionDenied);
+            return Err(VaultError::Unauthorized);
         }
 
         let mut config = storage::get_config(&env)?;
@@ -5064,7 +5064,7 @@ impl VaultDAO {
         granter.require_auth();
 
         if !Self::check_permission(&env, &granter, &types::Permission::ManageRoles) {
-            return Err(VaultError::PermissionDenied);
+            return Err(VaultError::Unauthorized);
         }
 
         let mut permissions = storage::get_permissions(&env, &target);
@@ -5072,7 +5072,7 @@ impl VaultDAO {
         // Check if permission already exists
         for p in permissions.iter() {
             if p.permission == permission {
-                return Err(VaultError::PermissionAlreadyGranted);
+                return Err(VaultError::AlreadyApproved);
             }
         }
 
@@ -5100,7 +5100,7 @@ impl VaultDAO {
         revoker.require_auth();
 
         if !Self::check_permission(&env, &revoker, &types::Permission::ManageRoles) {
-            return Err(VaultError::PermissionDenied);
+            return Err(VaultError::Unauthorized);
         }
 
         let permissions = storage::get_permissions(&env, &target);
@@ -5116,7 +5116,7 @@ impl VaultDAO {
         }
 
         if !found {
-            return Err(VaultError::PermissionNotFound);
+            return Err(VaultError::ProposalNotFound);
         }
 
         storage::set_permissions(&env, &target, new_permissions);
@@ -5136,7 +5136,7 @@ impl VaultDAO {
         delegator.require_auth();
 
         if !Self::check_permission(&env, &delegator, &permission) {
-            return Err(VaultError::PermissionDenied);
+            return Err(VaultError::Unauthorized);
         }
 
         let delegation = types::DelegatedPermission {

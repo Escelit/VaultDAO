@@ -175,7 +175,7 @@ fn test_unauthorized_proposal() {
     );
 
     assert!(res.is_err());
-    assert_eq!(res.err(), Some(Ok(VaultError::PermissionDenied)));
+    assert_eq!(res.err(), Some(Ok(VaultError::Unauthorized)));
 }
 
 #[test]
