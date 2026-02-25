@@ -2014,20 +2014,13 @@ impl VaultDAO {
         Ok(())
     }
 
-
     /// Get subscription details
-    pub fn get_subscription(
-        env: Env,
-        subscription_id: u64,
-    ) -> Result<Subscription, VaultError> {
+    pub fn get_subscription(env: Env, subscription_id: u64) -> Result<Subscription, VaultError> {
         storage::get_subscription(&env, subscription_id)
     }
 
     /// Get subscription payment history
-    pub fn get_subscription_payments(
-        env: Env,
-        subscription_id: u64,
-    ) -> Vec<SubscriptionPayment> {
+    pub fn get_subscription_payments(env: Env, subscription_id: u64) -> Vec<SubscriptionPayment> {
         storage::get_subscription_payments(&env, subscription_id)
     }
 
@@ -3392,20 +3385,16 @@ impl VaultDAO {
                 amount_b,
                 min_lp_tokens,
             )?,
-            SwapProposal::RemoveLiquidity(
-                dex,
-                lp_token,
-                amount,
-                min_token_a,
-                min_token_b,
-            ) => Self::remove_liquidity_from_pool(
-                &env,
-                &dex,
-                &lp_token,
-                amount,
-                min_token_a,
-                min_token_b,
-            )?,
+            SwapProposal::RemoveLiquidity(dex, lp_token, amount, min_token_a, min_token_b) => {
+                Self::remove_liquidity_from_pool(
+                    &env,
+                    &dex,
+                    &lp_token,
+                    amount,
+                    min_token_a,
+                    min_token_b,
+                )?
+            }
             SwapProposal::StakeLp(farm, lp_token, amount) => {
                 Self::stake_lp_tokens(&env, &farm, &lp_token, amount)?
             }
@@ -4707,9 +4696,7 @@ impl VaultDAO {
         let current_ledger = env.ledger().sequence() as u64;
 
         // Validate escrow is active
-        if escrow.status != EscrowStatus::Pending
-            && escrow.status != EscrowStatus::Active
-        {
+        if escrow.status != EscrowStatus::Pending && escrow.status != EscrowStatus::Active {
             return Err(VaultError::ProposalNotPending);
         }
 
@@ -5267,8 +5254,7 @@ impl VaultDAO {
         }
 
         let mut proposal = storage::get_recovery_proposal(&env, proposal_id)?;
-        if proposal.status != RecoveryStatus::Pending
-            && proposal.status != RecoveryStatus::Approved
+        if proposal.status != RecoveryStatus::Pending && proposal.status != RecoveryStatus::Approved
         {
             return Err(VaultError::ProposalNotPending);
         }

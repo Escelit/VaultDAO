@@ -2,8 +2,8 @@
 
 use super::*;
 use crate::types::{
-    DexConfig, ExecutionFeeEstimate, RetryConfig, StreamStatus, SubscriptionStatus, SubscriptionTier, SwapProposal,
-    TimeBasedThreshold, TransferDetails, VelocityConfig,
+    DexConfig, ExecutionFeeEstimate, RetryConfig, StreamStatus, SubscriptionStatus,
+    SubscriptionTier, SwapProposal, TimeBasedThreshold, TransferDetails, VelocityConfig,
 };
 use crate::{InitConfig, VaultDAO, VaultDAOClient};
 use soroban_sdk::{
@@ -6520,8 +6520,6 @@ fn test_estimate_execution_fee_breakdown_and_storage() {
     let stream = client.get_stream(&stream_id);
     assert_eq!(stream.status, StreamStatus::Completed);
 }
-
-
 
 #[test]
 fn test_estimate_execution_fee_includes_insurance_step() {
