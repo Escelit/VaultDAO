@@ -6052,7 +6052,7 @@ fn test_reputation_high_score_get_limits_boost() {
     let client = VaultDAOClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
-    let proposer = Address::generate(&env);
+    let _proposer = Address::generate(&env);
     let treasurer = Address::generate(&env);
     let signer = Address::generate(&env);
     let recipient = Address::generate(&env);

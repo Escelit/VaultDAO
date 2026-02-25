@@ -828,6 +828,7 @@ pub fn get_template(env: &Env, id: u64) -> Result<ProposalTemplate, VaultError> 
 }
 
 /// Check if a template exists
+#[allow(dead_code)]
 pub fn template_exists(env: &Env, id: u64) -> bool {
     env.storage().persistent().has(&DataKey::Template(id))
 }
@@ -847,6 +848,7 @@ pub fn set_template_name_mapping(env: &Env, name: &soroban_sdk::Symbol, id: u64)
 }
 
 /// Remove template name mapping
+#[allow(dead_code)]
 pub fn remove_template_name_mapping(env: &Env, name: &soroban_sdk::Symbol) {
     env.storage()
         .instance()

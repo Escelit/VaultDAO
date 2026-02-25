@@ -407,6 +407,7 @@ pub fn emit_proposal_deadline_rejected(env: &Env, proposal_id: u64, deadline: u6
 // ============================================================================
 
 /// Emit when a new template is created
+#[allow(dead_code)]
 pub fn emit_template_created(
     env: &Env,
     template_id: u64,
@@ -420,6 +421,7 @@ pub fn emit_template_created(
 }
 
 /// Emit when a template is updated
+#[allow(dead_code)]
 pub fn emit_template_updated(
     env: &Env,
     template_id: u64,
@@ -434,6 +436,7 @@ pub fn emit_template_updated(
 }
 
 /// Emit when a template's active status changes
+#[allow(dead_code)]
 pub fn emit_template_status_changed(
     env: &Env,
     template_id: u64,
