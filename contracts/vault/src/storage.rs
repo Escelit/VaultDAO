@@ -22,9 +22,10 @@ use soroban_sdk::{contracttype, Address, Env, String, Vec};
 
 use crate::errors::VaultError;
 use crate::types::{
-    Comment, Config, CrossVaultConfig, CrossVaultProposal, Dispute, Escrow, GasConfig,
-    InsuranceConfig, ListMode, NotificationPreferences, Proposal, ProposalAmendment,
-    ProposalTemplate, Reputation, RetryState, Role, VaultMetrics, VelocityConfig,
+    Comment, Config, CrossVaultConfig, CrossVaultProposal, Dispute, Escrow, FundingRound,
+    FundingRoundConfig, GasConfig, InsuranceConfig, ListMode, NotificationPreferences, Proposal,
+    ProposalAmendment, ProposalTemplate, Reputation, RetryState, Role, VaultMetrics,
+    VelocityConfig,
 };
 
 /// Storage key definitions
@@ -119,6 +120,14 @@ pub enum DataKey {
     RecipientEscrows(Address),
     /// Insurance pool accumulated slashed funds (Token Address) -> i128
     InsurancePool(Address),
+    /// Funding round by ID -> FundingRound
+    FundingRound(u64),
+    /// Next funding round ID counter -> u64
+    NextFundingRoundId,
+    /// Funding round IDs by proposal ID -> Vec<u64>
+    ProposalFundingRounds(u64),
+    /// Funding round configuration -> FundingRoundConfig
+    FundingRoundConfig,
 }
 
 /// TTL constants (in ledgers, ~5 seconds each)
@@ -1059,6 +1068,67 @@ pub fn add_recipient_escrow(env: &Env, recipient: &Address, escrow_id: u64) {
     escrows.push_back(escrow_id);
     let key = DataKey::RecipientEscrows(recipient.clone());
     env.storage().persistent().set(&key, &escrows);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, INSTANCE_TTL_THRESHOLD, INSTANCE_TTL);
+}
+
+// ============================================================================
+// Funding Rounds
+// ============================================================================
+
+pub fn get_funding_round_config(env: &Env) -> Option<FundingRoundConfig> {
+    env.storage().instance().get(&DataKey::FundingRoundConfig)
+}
+
+pub fn set_funding_round_config(env: &Env, config: &FundingRoundConfig) {
+    env.storage()
+        .instance()
+        .set(&DataKey::FundingRoundConfig, config);
+}
+
+fn get_next_funding_round_id(env: &Env) -> u64 {
+    env.storage()
+        .instance()
+        .get(&DataKey::NextFundingRoundId)
+        .unwrap_or(1)
+}
+
+pub fn bump_funding_round_id(env: &Env) -> u64 {
+    let id = get_next_funding_round_id(env);
+    env.storage()
+        .instance()
+        .set(&DataKey::NextFundingRoundId, &(id + 1));
+    id
+}
+
+pub fn get_funding_round(env: &Env, id: u64) -> Result<FundingRound, VaultError> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::FundingRound(id))
+        .ok_or(VaultError::ProposalNotFound)
+}
+
+pub fn set_funding_round(env: &Env, round: &FundingRound) {
+    let key = DataKey::FundingRound(round.id);
+    env.storage().persistent().set(&key, round);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, PROPOSAL_TTL / 2, PROPOSAL_TTL);
+}
+
+pub fn get_proposal_funding_rounds(env: &Env, proposal_id: u64) -> Vec<u64> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::ProposalFundingRounds(proposal_id))
+        .unwrap_or_else(|| Vec::new(env))
+}
+
+pub fn add_proposal_funding_round(env: &Env, proposal_id: u64, round_id: u64) {
+    let mut rounds = get_proposal_funding_rounds(env, proposal_id);
+    rounds.push_back(round_id);
+    let key = DataKey::ProposalFundingRounds(proposal_id);
+    env.storage().persistent().set(&key, &rounds);
     env.storage()
         .persistent()
         .extend_ttl(&key, INSTANCE_TTL_THRESHOLD, INSTANCE_TTL);
