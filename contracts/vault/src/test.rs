@@ -2,8 +2,9 @@
 
 use super::*;
 use crate::types::{
-    CrossVaultConfig, CrossVaultStatus, DexConfig, DisputeResolution, DisputeStatus, RetryConfig,
-    SwapProposal, TimeBasedThreshold, TransferDetails, VaultAction, VelocityConfig,
+    CrossVaultConfig, CrossVaultStatus, DexConfig, DisputeResolution, DisputeStatus, FeeStructure,
+    FeeTier, RetryConfig, SwapProposal, TimeBasedThreshold, TransferDetails, VaultAction,
+    VelocityConfig,
 };
 use crate::{InitConfig, VaultDAO, VaultDAOClient};
 use soroban_sdk::{
@@ -6752,20 +6753,20 @@ fn test_fee_structure_configuration() {
 
     // Create fee structure with tiers
     let mut tiers = Vec::new(&env);
-    tiers.push_back(types::FeeTier {
+    tiers.push_back(FeeTier {
         min_volume: 1000,
         fee_bps: 40, // 0.4% for volume >= 1000
     });
-    tiers.push_back(types::FeeTier {
+    tiers.push_back(FeeTier {
         min_volume: 5000,
         fee_bps: 30, // 0.3% for volume >= 5000
     });
-    tiers.push_back(types::FeeTier {
+    tiers.push_back(FeeTier {
         min_volume: 10000,
         fee_bps: 20, // 0.2% for volume >= 10000
     });
 
-    let fee_structure = types::FeeStructure {
+    let fee_structure = FeeStructure {
         tiers,
         base_fee_bps: 50, // 0.5% base
         reputation_discount_threshold: 750,
@@ -6803,7 +6804,7 @@ fn test_fee_calculation_base_rate() {
     client.initialize(&admin, &config);
 
     // Enable fees with base rate only
-    let fee_structure = types::FeeStructure {
+    let fee_structure = FeeStructure {
         tiers: Vec::new(&env),
         base_fee_bps: 50, // 0.5%
         reputation_discount_threshold: 750,
@@ -6845,16 +6846,16 @@ fn test_fee_calculation_volume_tiers() {
 
     // Set up fee tiers
     let mut tiers = Vec::new(&env);
-    tiers.push_back(types::FeeTier {
+    tiers.push_back(FeeTier {
         min_volume: 1000,
         fee_bps: 40, // 0.4%
     });
-    tiers.push_back(types::FeeTier {
+    tiers.push_back(FeeTier {
         min_volume: 5000,
         fee_bps: 30, // 0.3%
     });
 
-    let fee_structure = types::FeeStructure {
+    let fee_structure = FeeStructure {
         tiers,
         base_fee_bps: 50, // 0.5% base
         reputation_discount_threshold: 750,
@@ -6898,7 +6899,7 @@ fn test_fee_calculation_reputation_discount() {
     client.set_role(&admin, &high_rep_user, &Role::Treasurer);
 
     // Enable fees
-    let fee_structure = types::FeeStructure {
+    let fee_structure = FeeStructure {
         tiers: Vec::new(&env),
         base_fee_bps: 100, // 1%
         reputation_discount_threshold: 750,
@@ -6942,7 +6943,7 @@ fn test_fee_disabled() {
     client.initialize(&admin, &config);
 
     // Disable fees
-    let fee_structure = types::FeeStructure {
+    let fee_structure = FeeStructure {
         tiers: Vec::new(&env),
         base_fee_bps: 50,
         reputation_discount_threshold: 750,
@@ -6977,7 +6978,7 @@ fn test_fee_structure_validation() {
     client.initialize(&admin, &config);
 
     // Test invalid base fee (> 100%)
-    let mut invalid_fee_structure = types::FeeStructure {
+    let mut invalid_fee_structure = FeeStructure {
         tiers: Vec::new(&env),
         base_fee_bps: 15000, // > 10000 (100%)
         reputation_discount_threshold: 750,
@@ -7015,7 +7016,7 @@ fn test_fee_structure_unauthorized() {
     let config = default_init_config(&env, signers, 1);
     client.initialize(&admin, &config);
 
-    let fee_structure = types::FeeStructure {
+    let fee_structure = FeeStructure {
         tiers: Vec::new(&env),
         base_fee_bps: 50,
         reputation_discount_threshold: 750,
