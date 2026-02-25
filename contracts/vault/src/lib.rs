@@ -19,9 +19,9 @@ pub use types::InitConfig;
 use errors::VaultError;
 use soroban_sdk::{contract, contractimpl, Address, Env, Map, String, Symbol, Vec};
 use types::{
-    Comment, Condition, ConditionLogic, Config, ExecutionFeeEstimate, GasConfig,
-    InsuranceConfig, ListMode, NotificationPreferences, Priority, Proposal, ProposalAmendment,
-    ProposalStatus, ProposalTemplate, Reputation, RetryConfig, RetryState, Role, TemplateOverrides,
+    Comment, Condition, ConditionLogic, Config, ExecutionFeeEstimate, GasConfig, InsuranceConfig,
+    ListMode, NotificationPreferences, Priority, Proposal, ProposalAmendment, ProposalStatus,
+    ProposalTemplate, Reputation, RetryConfig, RetryState, Role, TemplateOverrides,
     ThresholdStrategy, VaultMetrics,
 };
 

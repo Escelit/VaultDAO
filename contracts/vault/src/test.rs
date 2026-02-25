@@ -6381,7 +6381,7 @@ fn test_estimate_execution_fee_includes_insurance_step() {
     let admin = Address::generate(&env);
     let treasurer = Address::generate(&env);
     let recipient = Address::generate(&env);
-    
+
     // Register a proper Stellar Asset Contract for the token
     let token_admin = Address::generate(&env);
     let sac = env.register_stellar_asset_contract_v2(token_admin.clone());

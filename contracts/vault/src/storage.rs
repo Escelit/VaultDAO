@@ -22,8 +22,8 @@ use soroban_sdk::{contracttype, Address, Env, String, Vec};
 
 use crate::errors::VaultError;
 use crate::types::{
-    Comment, Config, DexConfig, Escrow, ExecutionFeeEstimate, GasConfig, InsuranceConfig,
-    ListMode, NotificationPreferences, Proposal, ProposalAmendment, ProposalTemplate, RecoveryProposal,
+    Comment, Config, DexConfig, Escrow, ExecutionFeeEstimate, GasConfig, InsuranceConfig, ListMode,
+    NotificationPreferences, Proposal, ProposalAmendment, ProposalTemplate, RecoveryProposal,
     Reputation, RetryState, Role, Subscription, SubscriptionPayment, VaultMetrics, VelocityConfig,
 };
 
