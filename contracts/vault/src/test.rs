@@ -6354,6 +6354,7 @@ fn test_wallet_recovery_flow() {
     // 1. Initiate recovery
     let mut new_signers = Vec::new(&env);
     new_signers.push_back(new_signer.clone());
+
     let recovery_id = client.initiate_recovery(&Address::generate(&env), &new_signers, &1);
 
     // 2. First guardian approval
@@ -6643,6 +6644,7 @@ fn test_insurance_pool_withdrawal() {
     let client = VaultDAOClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
+
     let proposer = Address::generate(&env);
     let withdraw_target = Address::generate(&env);
 
