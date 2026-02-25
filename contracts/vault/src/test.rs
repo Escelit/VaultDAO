@@ -6816,7 +6816,7 @@ fn test_fee_calculation_base_rate() {
 
     // Calculate fee for 1000 stroops
     let fee_calc = client.calculate_fee(&user, &token, &1000);
-    
+
     // Expected: 1000 * 50 / 10000 = 5 stroops
     assert_eq!(fee_calc.base_fee, 5);
     assert_eq!(fee_calc.final_fee, 5);
@@ -6911,13 +6911,13 @@ fn test_fee_calculation_reputation_discount() {
 
     // Build reputation by creating and executing proposals
     // (In a real test, we'd need to go through the full proposal lifecycle)
-    
+
     // For now, just verify the fee calculation logic
     let fee_calc = client.calculate_fee(&high_rep_user, &token, &1000);
-    
+
     // Base fee: 1000 * 100 / 10000 = 10
     assert_eq!(fee_calc.base_fee, 10);
-    
+
     // Without high reputation, no discount
     assert_eq!(fee_calc.discount, 0);
 }

@@ -22,8 +22,8 @@ use types::{
     Comment, Condition, ConditionLogic, Config, CrossVaultConfig, CrossVaultProposal,
     CrossVaultStatus, Dispute, DisputeResolution, DisputeStatus, FeeCalculation, FeeStructure,
     GasConfig, InsuranceConfig, ListMode, NotificationPreferences, Priority, Proposal,
-    ProposalAmendment, ProposalStatus, ProposalTemplate, Reputation, RetryConfig, RetryState,
-    Role, TemplateOverrides, ThresholdStrategy, VaultAction, VaultMetrics,
+    ProposalAmendment, ProposalStatus, ProposalTemplate, Reputation, RetryConfig, RetryState, Role,
+    TemplateOverrides, ThresholdStrategy, VaultAction, VaultMetrics,
 };
 
 /// The main contract structure for VaultDAO.
@@ -2929,7 +2929,7 @@ impl VaultDAO {
         let fee_structure = storage::get_fee_structure(env);
 
         // Transfer fee from vault to treasury
-        token::transfer_from_vault(env, token, &fee_structure.treasury, fee_calc.final_fee);
+        token::transfer(env, token, &fee_structure.treasury, fee_calc.final_fee);
 
         // Update fee collection stats
         storage::add_fees_collected(env, token, fee_calc.final_fee);

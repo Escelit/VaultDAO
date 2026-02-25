@@ -1025,12 +1025,16 @@ pub struct FeeStructure {
 
 impl FeeStructure {
     pub fn default(env: &Env) -> Self {
+        // Use contract's own address as default treasury
+        // Admin should set a proper treasury address before enabling fees
+        let treasury = env.current_contract_address();
+
         FeeStructure {
             tiers: Vec::new(env),
             base_fee_bps: 50, // 0.5% default
             reputation_discount_threshold: 750,
             reputation_discount_percentage: 50, // 50% discount
-            treasury: Address::generate(env),
+            treasury,
             enabled: false,
         }
     }
@@ -1051,4 +1055,3 @@ pub struct FeeCalculation {
     /// Whether reputation discount was applied
     pub reputation_discount_applied: bool,
 }
-
