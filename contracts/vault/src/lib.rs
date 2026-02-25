@@ -1,4 +1,4 @@
-//! VaultDAO - Multi-Signature Treasury Contract
+//! VaultDAO - Multi-Signature Treasury Contract with Audit Trail
 //!
 //! A Soroban smart contract implementing M-of-N multisig with RBAC,
 //! proposal workflows, spending limits, reputation, insurance, and batch execution.
