@@ -1837,9 +1837,6 @@ impl VaultDAO {
         }
     }
 
-        Ok(true)
-    }
-
     // ========================================================================
     // Cross-Vault Proposal Coordination (Issue: feature/cross-vault-coordination)
     // ========================================================================
