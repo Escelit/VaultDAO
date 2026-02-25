@@ -144,6 +144,8 @@ pub enum DataKey {
     Stream(StreamKey),
     /// Batch transaction related data -> BatchKey
     Batch(BatchKey),
+    /// Oracle configuration -> VaultOracleConfig
+    VaultOracleConfig,
 }
 
 /// TTL constants (in ledgers, ~5 seconds each)
@@ -666,7 +668,7 @@ pub fn get_reputation(env: &Env, addr: &Address) -> Reputation {
     env.storage()
         .persistent()
         .get(&DataKey::Reputation(addr.clone()))
-        .unwrap_or_else(Reputation::default)
+        .unwrap_or_default()
 }
 
 pub fn set_reputation(env: &Env, addr: &Address, rep: &Reputation) {
@@ -768,7 +770,7 @@ pub fn get_notification_prefs(env: &Env, addr: &Address) -> NotificationPreferen
     env.storage()
         .persistent()
         .get(&DataKey::NotificationPrefs(addr.clone()))
-        .unwrap_or_else(NotificationPreferences::default)
+        .unwrap_or_default()
 }
 
 pub fn set_notification_prefs(env: &Env, addr: &Address, prefs: &NotificationPreferences) {
@@ -791,6 +793,16 @@ pub fn set_dex_config(env: &Env, config: &DexConfig) {
 
 pub fn get_dex_config(env: &Env) -> Option<DexConfig> {
     env.storage().instance().get(&DataKey::DexConfig)
+}
+
+// ============================================================================
+// Oracle Config
+// ============================================================================
+
+pub fn set_oracle_config(env: &Env, config: &crate::OptionalVaultOracleConfig) {
+    env.storage()
+        .instance()
+        .set(&DataKey::VaultOracleConfig, config);
 }
 
 pub fn set_swap_proposal(env: &Env, proposal_id: u64, swap: &SwapProposal) {
@@ -829,7 +841,7 @@ pub fn get_gas_config(env: &Env) -> GasConfig {
     env.storage()
         .instance()
         .get(&DataKey::GasConfig)
-        .unwrap_or_else(GasConfig::default)
+        .unwrap_or_default()
 }
 
 pub fn set_gas_config(env: &Env, config: &GasConfig) {
@@ -858,7 +870,7 @@ pub fn get_metrics(env: &Env) -> VaultMetrics {
     env.storage()
         .instance()
         .get(&DataKey::Metrics)
-        .unwrap_or_else(VaultMetrics::default)
+        .unwrap_or_default()
 }
 
 pub fn set_metrics(env: &Env, metrics: &VaultMetrics) {
