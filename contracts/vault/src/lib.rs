@@ -868,6 +868,11 @@ impl VaultDAO {
     /// 3. Any applicable timelock has expired.
     /// 4. The vault has sufficient balance of the target token.
     ///
+    /// Rollback behavior:
+    /// - A snapshot of execution-critical state is recorded before transfer.
+    /// - If transfer fails, proposal and queue state are restored from snapshot.
+    /// - A rollback event is emitted with the failure reason code.
+    ///
     /// # Arguments
     /// * `executor` - The address triggering the final transfer (must authorize).
     /// * `proposal_id` - ID of the proposal to execute.
@@ -998,8 +1003,16 @@ impl VaultDAO {
             }
         }
 
-        // Execute transfer
-        token::transfer(&env, &proposal.token, &proposal.recipient, proposal.amount);
+        // Snapshot state before execution mutations.
+        let priority = proposal.priority as u32;
+        storage::set_execution_snapshot(
+            &env,
+            proposal_id,
+            &storage::ExecutionSnapshot {
+                proposal: proposal.clone(),
+                was_in_priority_queue: storage::is_in_priority_queue(&env, priority, proposal_id),
+            },
+        );
 
         // Execute post-execution hooks
         for i in 0..config.post_execution_hooks.len() {

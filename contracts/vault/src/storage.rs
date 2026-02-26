@@ -662,6 +662,34 @@ pub fn add_comment_to_proposal(env: &Env, proposal_id: u64, comment_id: u64) {
         .extend_ttl(&key, INSTANCE_TTL_THRESHOLD, INSTANCE_TTL);
 }
 
+pub fn is_in_priority_queue(env: &Env, priority: u32, proposal_id: u64) -> bool {
+    get_proposals_by_priority(env, priority).contains(proposal_id)
+}
+
+// ============================================================================
+// Execution Snapshot Management
+// ============================================================================
+
+pub fn set_execution_snapshot(env: &Env, proposal_id: u64, snapshot: &ExecutionSnapshot) {
+    let key = DataKey::ExecutionSnapshot(proposal_id);
+    env.storage().temporary().set(&key, snapshot);
+    env.storage()
+        .temporary()
+        .extend_ttl(&key, DAY_IN_LEDGERS, DAY_IN_LEDGERS);
+}
+
+pub fn get_execution_snapshot(env: &Env, proposal_id: u64) -> Option<ExecutionSnapshot> {
+    env.storage()
+        .temporary()
+        .get(&DataKey::ExecutionSnapshot(proposal_id))
+}
+
+pub fn remove_execution_snapshot(env: &Env, proposal_id: u64) {
+    env.storage()
+        .temporary()
+        .remove(&DataKey::ExecutionSnapshot(proposal_id));
+}
+
 // ============================================================================
 // Attachments
 // ============================================================================
