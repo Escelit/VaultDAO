@@ -22,6 +22,10 @@ use soroban_sdk::{contracttype, Address, Env, String, Vec};
 
 use crate::errors::VaultError;
 use crate::types::{
+    BatchExecutionResult, BatchTransaction, Comment, Config, DexConfig, Escrow,
+    ExecutionFeeEstimate, GasConfig, InsuranceConfig, ListMode, NotificationPreferences, Proposal,
+    ProposalAmendment, ProposalTemplate, RecoveryProposal, Reputation, RetryState, Role,
+    VaultMetrics, VelocityConfig,
     Comment, Config, CrossVaultConfig, CrossVaultProposal, Dispute, Escrow, FeeStructure,
     GasConfig, InsuranceConfig, ListMode, NotificationPreferences, Proposal, ProposalAmendment,
     ProposalTemplate, RecoveryProposal, Reputation, RetryState, Role, StakeRecord, StakingConfig,
@@ -106,14 +110,6 @@ pub enum FeatureKey {
     TemplateName(soroban_sdk::Symbol),
     /// Retry state for a proposal -> RetryState
     RetryState(u64),
-    /// Subscription by ID -> Subscription
-    Subscription(u64),
-    /// Next subscription ID counter -> u64
-    NextSubscriptionId,
-    /// Subscription payments by subscription ID -> Vec<SubscriptionPayment>
-    SubscriptionPayments(u64),
-    /// Subscriber subscriptions by address -> Vec<u64>
-    SubscriberSubscriptions(Address),
     /// Escrow agreement by ID -> Escrow
     Escrow(u64),
     /// Next escrow ID counter -> u64
@@ -122,12 +118,14 @@ pub enum FeatureKey {
     FunderEscrows(Address),
     /// Escrow IDs by recipient address -> Vec<u64>
     RecipientEscrows(Address),
-    /// Recovery proposal by ID -> RecoveryProposal
-    RecoveryProposal(u64),
-    /// Next recovery proposal ID counter -> u64
-    NextRecoveryId,
     /// Insurance pool accumulated slashed funds (Token Address) -> i128
     InsurancePool(Address),
+    /// Token lock by owner address -> TokenLock
+    TokenLock(Address),
+    /// Time-weighted voting configuration -> TimeWeightedConfig
+    TimeWeightedConfig,
+    /// Total locked tokens by address -> i128
+    TotalLocked(Address),
     /// Fee structure configuration -> FeeStructure
     FeeStructure,
     /// Total fees collected per token -> i128
@@ -158,6 +156,12 @@ pub enum FeatureKey {
     BatchResult(u64),
     /// Batch rollback state -> Vec<(Address, i128)>
     BatchRollback(u64),
+    /// Next batch ID counter -> u64
+    BatchIdCounter,
+    /// Recovery proposal by ID -> RecoveryProposal
+    RecoveryProposal(u64),
+    /// Next recovery ID counter -> u64
+    NextRecoveryId,
 }
 
 /// TTL constants (in ledgers, ~5 seconds each)
@@ -1014,6 +1018,7 @@ pub fn set_retry_state(env: &Env, proposal_id: u64, state: &RetryState) {
         .extend_ttl(&key, PROPOSAL_TTL / 2, PROPOSAL_TTL);
 }
 
+/*
 // ============================================================================
 // Subscription System (Issue: feature/subscription-system)
 // ============================================================================
@@ -1081,6 +1086,8 @@ pub fn add_subscriber_subscription(env: &Env, subscriber: &Address, subscription
         .persistent()
         .extend_ttl(&key, INSTANCE_TTL_THRESHOLD, INSTANCE_TTL);
 }
+*/
+
 // ============================================================================
 // Escrow (Issue: feature/escrow-system)
 // ============================================================================
@@ -1150,12 +1157,109 @@ pub fn add_recipient_escrow(env: &Env, recipient: &Address, escrow_id: u64) {
 }
 
 // ============================================================================
+// Time-Weighted Voting (Issue: feature/time-weighted-voting)
+// ============================================================================
+
+use crate::types::{TimeWeightedConfig, TokenLock};
+
+/// Get time-weighted voting configuration
+pub fn get_time_weighted_config(env: &Env) -> TimeWeightedConfig {
+    env.storage()
+        .instance()
+        .get(&DataKey::TimeWeightedConfig)
+        .unwrap_or_else(TimeWeightedConfig::default)
+}
+
+/// Set time-weighted voting configuration
+pub fn set_time_weighted_config(env: &Env, config: &TimeWeightedConfig) {
+    env.storage()
+        .instance()
+        .set(&DataKey::TimeWeightedConfig, config);
+}
+
+/// Get token lock for an address
+pub fn get_token_lock(env: &Env, owner: &Address) -> Option<TokenLock> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::TokenLock(owner.clone()))
+}
+
+/// Set token lock for an address
+pub fn set_token_lock(env: &Env, lock: &TokenLock) {
+    let key = DataKey::TokenLock(lock.owner.clone());
+    env.storage().persistent().set(&key, lock);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, INSTANCE_TTL_THRESHOLD, INSTANCE_TTL);
+}
+
+/// Remove token lock for an address
+#[allow(dead_code)]
+pub fn remove_token_lock(env: &Env, owner: &Address) {
+    env.storage()
+        .persistent()
+        .remove(&DataKey::TokenLock(owner.clone()));
+}
+
+/// Get total locked tokens for an address
+#[allow(dead_code)]
+pub fn get_total_locked(env: &Env, owner: &Address) -> i128 {
+    env.storage()
+        .persistent()
+        .get(&DataKey::TotalLocked(owner.clone()))
+        .unwrap_or(0)
+}
+
+/// Set total locked tokens for an address
+pub fn set_total_locked(env: &Env, owner: &Address, amount: i128) {
+    let key = DataKey::TotalLocked(owner.clone());
+    env.storage().persistent().set(&key, &amount);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, INSTANCE_TTL_THRESHOLD, INSTANCE_TTL);
+}
+
+/// Calculate voting power for an address including time-weighted locks
+pub fn calculate_voting_power(env: &Env, addr: &Address) -> i128 {
+    let config = get_time_weighted_config(env);
+
+    if !config.enabled {
+        // If time-weighted voting is disabled, return 1 (equal voting power)
+        return 1;
+    }
+
+    if let Some(lock) = get_token_lock(env, addr) {
+        let current_ledger = env.ledger().sequence() as u64;
+
+        if config.apply_decay {
+            let power = lock.calculate_decayed_power(current_ledger);
+            if power > 0 {
+                power
+            } else {
+                1 // Base voting power when lock expired or inactive
+            }
+        } else {
+            let power = lock.calculate_voting_power();
+            if power > 0 {
+                power
+            } else {
+                1 // Base voting power when lock inactive
+            }
+        }
+    } else {
+        // No lock = base voting power of 1
+        1
+    }
+}
+
+// ============================================================================
 // Batch Transactions
 // ============================================================================
 
 pub fn get_next_batch_id(env: &Env) -> u64 {
     env.storage()
         .instance()
+        .get(&DataKey::BatchIdCounter)
         .get::<FeatureKey, u64>(&FeatureKey::BatchIdCounter)
         .unwrap_or(0)
 }
@@ -1170,31 +1274,33 @@ pub fn increment_batch_id(env: &Env) -> u64 {
     next
 }
 
-pub fn set_batch(env: &Env, batch: &crate::types::BatchTransaction) {
-    let key = FeatureKey::Batch(batch.id);
+pub fn set_batch(env: &Env, batch: &BatchTransaction) {
+    let key = DataKey::Batch(batch.id);
     env.storage().persistent().set(&key, batch);
     env.storage()
         .persistent()
         .extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL);
 }
 
-pub fn get_batch(env: &Env, batch_id: u64) -> Result<crate::types::BatchTransaction, VaultError> {
-    let key = FeatureKey::Batch(batch_id);
+pub fn get_batch(env: &Env, batch_id: u64) -> Result<BatchTransaction, VaultError> {
+    let key = DataKey::Batch(batch_id);
     env.storage()
         .persistent()
         .get(&key)
-        .flatten()
-        .ok_or(VaultError::BatchNotFound)
+        .ok_or(VaultError::ProposalNotFound)
 }
 
-pub fn set_batch_result(env: &Env, result: &crate::types::BatchExecutionResult) {
-    let key = FeatureKey::BatchResult(result.batch_id);
+pub fn set_batch_result(env: &Env, result: &BatchExecutionResult) {
+    let key = DataKey::BatchResult(result.batch_id);
     env.storage().persistent().set(&key, result);
     env.storage()
         .persistent()
         .extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL);
 }
 
+pub fn get_batch_result(env: &Env, batch_id: u64) -> Option<BatchExecutionResult> {
+    let key = DataKey::BatchResult(batch_id);
+    env.storage().persistent().get(&key)
 pub fn get_batch_result(env: &Env, batch_id: u64) -> Option<crate::types::BatchExecutionResult> {
     let key = FeatureKey::BatchResult(batch_id);
     env.storage().persistent().get(&key).flatten()
@@ -1219,7 +1325,7 @@ pub fn set_rollback_state(env: &Env, batch_id: u64, state: &Vec<(Address, i128)>
 }
 
 // ============================================================================
-// Wallet Recovery (Issue: feature/wallet-recovery)
+// Wallet Recovery
 // ============================================================================
 
 pub fn get_recovery_proposal(env: &Env, id: u64) -> Result<RecoveryProposal, VaultError> {
