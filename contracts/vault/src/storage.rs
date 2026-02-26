@@ -94,6 +94,8 @@ pub enum FeatureKey {
     SwapResult(u64),
     /// Gas execution limit configuration -> GasConfig
     GasConfig,
+    /// Cached fee estimate for proposal execution -> ExecutionFeeEstimate
+    ExecutionFeeEstimate(u64),
     /// Vault-wide performance metrics -> VaultMetrics
     Metrics,
     /// Proposal template by ID -> ProposalTemplate
@@ -378,6 +380,46 @@ pub fn get_recurring_payment(
 }
 
 // ============================================================================
+// Streaming Payments
+// ============================================================================
+
+pub fn get_next_stream_id(env: &Env) -> u64 {
+    env.storage()
+        .instance()
+        .get::<DataKey, u64>(&DataKey::Stream(StreamKey::Counter))
+        .unwrap_or(1)
+}
+
+pub fn increment_stream_id(env: &Env) -> u64 {
+    let id = get_next_stream_id(env);
+    env.storage()
+        .instance()
+        .set(&DataKey::Stream(StreamKey::Counter), &(id + 1));
+    extend_instance_ttl(env);
+    id
+}
+
+pub fn set_streaming_payment(env: &Env, stream: &crate::types::StreamingPayment) {
+    let key = DataKey::Stream(StreamKey::Payment(stream.id));
+    env.storage().persistent().set(&key, stream);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL);
+}
+
+pub fn get_streaming_payment(
+    env: &Env,
+    id: u64,
+) -> Result<crate::types::StreamingPayment, VaultError> {
+    let key = DataKey::Stream(StreamKey::Payment(id));
+    env.storage()
+        .persistent()
+        .get(&key)
+        .flatten()
+        .ok_or(VaultError::ProposalNotFound)
+}
+
+// ============================================================================
 // TTL Management
 // ============================================================================
 
@@ -638,7 +680,7 @@ pub fn get_reputation(env: &Env, addr: &Address) -> Reputation {
     env.storage()
         .persistent()
         .get(&DataKey::Reputation(addr.clone()))
-        .unwrap_or_else(Reputation::default)
+        .unwrap_or_default()
 }
 
 pub fn set_reputation(env: &Env, addr: &Address, rep: &Reputation) {
@@ -755,7 +797,7 @@ pub fn set_notification_prefs(env: &Env, addr: &Address, prefs: &NotificationPre
 // DEX/AMM Integration (Issue: feature/amm-integration)
 // ============================================================================
 
-use crate::types::{DexConfig, SwapProposal, SwapResult};
+use crate::types::{SwapProposal, SwapResult};
 
 pub fn set_dex_config(env: &Env, config: &DexConfig) {
     env.storage().instance().set(&FeatureKey::DexConfig, config);
@@ -763,6 +805,16 @@ pub fn set_dex_config(env: &Env, config: &DexConfig) {
 
 pub fn get_dex_config(env: &Env) -> Option<DexConfig> {
     env.storage().instance().get(&FeatureKey::DexConfig)
+}
+
+// ============================================================================
+// Oracle Config
+// ============================================================================
+
+pub fn set_oracle_config(env: &Env, config: &crate::OptionalVaultOracleConfig) {
+    env.storage()
+        .instance()
+        .set(&DataKey::VaultOracleConfig, config);
 }
 
 pub fn set_swap_proposal(env: &Env, proposal_id: u64, swap: &SwapProposal) {
@@ -806,6 +858,20 @@ pub fn get_gas_config(env: &Env) -> GasConfig {
 
 pub fn set_gas_config(env: &Env, config: &GasConfig) {
     env.storage().instance().set(&FeatureKey::GasConfig, config);
+}
+
+pub fn get_execution_fee_estimate(env: &Env, proposal_id: u64) -> Option<ExecutionFeeEstimate> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::ExecutionFeeEstimate(proposal_id))
+}
+
+pub fn set_execution_fee_estimate(env: &Env, proposal_id: u64, estimate: &ExecutionFeeEstimate) {
+    let key = DataKey::ExecutionFeeEstimate(proposal_id);
+    env.storage().persistent().set(&key, estimate);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, PROPOSAL_TTL / 2, PROPOSAL_TTL);
 }
 
 // ============================================================================

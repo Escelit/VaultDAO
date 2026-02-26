@@ -150,6 +150,18 @@ pub fn emit_config_updated(env: &Env, updater: &Address) {
         .publish((Symbol::new(env, "config_updated"),), updater.clone());
 }
 
+// ============================================================================
+// Oracle Events (feature/oracle-integration)
+// ============================================================================
+
+/// Emit when oracle configuration is updated by admin
+pub fn emit_oracle_config_updated(env: &Env, admin: &Address, oracle: &Address) {
+    env.events().publish(
+        (Symbol::new(env, "oracle_cfg_updated"),),
+        (admin.clone(), oracle.clone()),
+    );
+}
+
 /// Emit when quorum configuration is updated by admin
 pub fn emit_quorum_updated(env: &Env, admin: &Address, old_quorum: u32, new_quorum: u32) {
     env.events().publish(
@@ -396,6 +408,26 @@ pub fn emit_gas_limit_exceeded(env: &Env, proposal_id: u64, gas_used: u64, gas_l
 pub fn emit_gas_config_updated(env: &Env, admin: &Address) {
     env.events()
         .publish((Symbol::new(env, "gas_cfg_updated"),), admin.clone());
+}
+
+/// Emit when execution fee estimate is calculated/refreshed for a proposal.
+pub fn emit_execution_fee_estimated(
+    env: &Env,
+    proposal_id: u64,
+    base_fee: u64,
+    resource_fee: u64,
+    total_fee: u64,
+) {
+    env.events().publish(
+        (Symbol::new(env, "exec_fee_estimated"), proposal_id),
+        (base_fee, resource_fee, total_fee),
+    );
+}
+
+/// Emit when a proposal execution consumes its estimated fee.
+pub fn emit_execution_fee_used(env: &Env, proposal_id: u64, total_fee: u64) {
+    env.events()
+        .publish((Symbol::new(env, "exec_fee_used"), proposal_id), total_fee);
 }
 
 // ============================================================================

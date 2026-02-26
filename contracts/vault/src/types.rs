@@ -19,6 +19,33 @@
 
 use soroban_sdk::{contracttype, Address, Env, Map, String, Symbol, Vec};
 
+/// Oracle configuration for price feeds
+#[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VaultOracleConfig {
+    /// Address of the oracle contract
+    pub address: Address,
+    /// Asset symbol for the base currency (e.g., USD)
+    pub base_symbol: Symbol,
+    /// Maximum ledgers before price is considered stale
+    pub max_staleness: u32,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum OptionalVaultOracleConfig {
+    None,
+    Some(VaultOracleConfig),
+}
+
+/// Price data from an oracle
+#[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VaultPriceData {
+    pub price: i128,
+    pub timestamp: u64,
+}
+
 /// Initialization configuration - groups all config params to reduce function arguments
 #[contracttype]
 #[derive(Clone, Debug)]
@@ -164,6 +191,48 @@ pub enum Role {
     Admin = 2,
 }
 
+/// Granular permissions for fine-grained access control
+#[contracttype]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum Permission {
+    CreateProposal = 0,
+    ApproveProposal = 1,
+    ExecuteProposal = 2,
+    CancelProposal = 3,
+    ManageRoles = 4,
+    ManageSigners = 5,
+    ManageConfig = 6,
+    ManageRecurring = 7,
+    ManageLists = 8,
+    ManageTemplates = 9,
+    ManageEscrow = 10,
+    ManageSubscriptions = 11,
+    ViewMetrics = 12,
+    ManageRecovery = 13,
+}
+
+/// Permission grant with optional expiry
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct PermissionGrant {
+    pub permission: Permission,
+    pub granted_by: Address,
+    pub granted_at: u64,
+    pub expires_at: Option<u64>,
+}
+
+/// Delegated permission with expiry
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct DelegatedPermission {
+    pub permission: Permission,
+    pub delegator: Address,
+    pub delegatee: Address,
+    pub granted_at: u64,
+    pub expires_at: u64,
+}
+
 /// The lifecycle states of a proposal.
 #[contracttype]
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -204,6 +273,10 @@ pub enum Condition {
     DateAfter(u64),
     /// Execute only before this ledger sequence
     DateBefore(u64),
+    /// Execute only when asset price is above threshold (in USD)
+    PriceAbove(Address, i128),
+    /// Execute only when asset price is below threshold (in USD)
+    PriceBelow(Address, i128),
 }
 
 /// Logic for combining multiple conditions
@@ -323,6 +396,55 @@ pub struct RecurringPayment {
     pub is_active: bool,
 }
 
+// ============================================================================
+// Streaming Payments (Issue: feature/streaming-payments)
+// ============================================================================
+
+/// Status of a token stream
+#[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum StreamStatus {
+    /// Stream is active and accumulating claimable tokens
+    Active = 0,
+    /// Stream is paused; no tokens accumulate until resumed
+    Paused = 1,
+    /// Stream was cancelled; any remaining tokens returned to sender
+    Cancelled = 2,
+    /// Stream has reached its end time and all tokens are claimed
+    Completed = 3,
+}
+
+/// Continuous token transfer over time
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct StreamingPayment {
+    /// Unique stream ID
+    pub id: u64,
+    /// Address that created and funded the stream
+    pub sender: Address,
+    /// Address receiving the tokens
+    pub recipient: Address,
+    /// Token contract address
+    pub token_addr: Address,
+    /// Tokens per second (scaled to token decimals)
+    pub rate: i128,
+    /// Total amount committed to the stream
+    pub total_amount: i128,
+    /// Total amount already claimed by recipient
+    pub claimed_amount: i128,
+    /// Ledger timestamp when the stream was created
+    pub start_timestamp: u64,
+    /// Ledger timestamp when the stream will finish
+    pub end_timestamp: u64,
+    /// Ledger timestamp of the last status update or claim
+    pub last_update_timestamp: u64,
+    /// Total active seconds accumulated before the last pause
+    pub accumulated_seconds: u64,
+    /// Current status
+    pub status: StreamStatus,
+}
+
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct VelocityConfig {
@@ -360,8 +482,8 @@ pub struct Reputation {
     pub last_decay_ledger: u64,
 }
 
-impl Reputation {
-    pub fn default() -> Self {
+impl Default for Reputation {
+    fn default() -> Self {
         Reputation {
             score: 500, // Start at neutral 500/1000
             proposals_executed: 0,
@@ -409,8 +531,8 @@ pub struct NotificationPreferences {
     pub notify_on_expiry: bool,
 }
 
-impl NotificationPreferences {
-    pub fn default() -> Self {
+impl Default for NotificationPreferences {
+    fn default() -> Self {
         NotificationPreferences {
             notify_on_proposal: true,
             notify_on_approval: true,
@@ -439,8 +561,8 @@ pub struct GasConfig {
     pub condition_cost: u64,
 }
 
-impl GasConfig {
-    pub fn default() -> Self {
+impl Default for GasConfig {
+    fn default() -> Self {
         GasConfig {
             enabled: false,
             default_gas_limit: 0,
@@ -450,13 +572,27 @@ impl GasConfig {
     }
 }
 
+/// Estimated execution fee breakdown for a proposal.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct ExecutionFeeEstimate {
+    /// Flat base fee component.
+    pub base_fee: u64,
+    /// Dynamic fee component based on proposal execution complexity.
+    pub resource_fee: u64,
+    /// Total estimated execution fee.
+    pub total_fee: u64,
+    /// Number of logical operations used to derive `resource_fee`.
+    pub operation_count: u32,
+}
+
 // ============================================================================
 // Performance Metrics (Issue: feature/performance-metrics)
 // ============================================================================
 
 /// Vault-wide cumulative performance metrics
 #[contracttype]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct VaultMetrics {
     /// Total number of proposals ever created
     pub total_proposals: u64,
@@ -475,18 +611,6 @@ pub struct VaultMetrics {
 }
 
 impl VaultMetrics {
-    pub fn default() -> Self {
-        VaultMetrics {
-            total_proposals: 0,
-            executed_count: 0,
-            rejected_count: 0,
-            expired_count: 0,
-            total_execution_time_ledgers: 0,
-            total_gas_used: 0,
-            last_updated_ledger: 0,
-        }
-    }
-
     /// Success rate in basis points (0-10000)
     pub fn success_rate_bps(&self) -> u32 {
         let total = self.executed_count + self.rejected_count + self.expired_count;
