@@ -10,34 +10,27 @@ import Settings from './app/dashboard/Settings';
 import Templates from './app/dashboard/Templates';
 import RecurringPayments from './app/dashboard/RecurringPayments';
 import ErrorDashboard from './components/ErrorDashboard';
-import OnlineUsers from './components/OnlineUsers';
-import LiveUpdates from './components/LiveUpdates';
-import RealtimeNotifications from './components/RealtimeNotifications';
-import TypingIndicator from './components/TypingIndicator';
+import ErrorBoundary from './components/ErrorBoundary';
 
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="/dashboard" element={<DashboardLayout />}>
-          <Route index element={<Overview />} />
-          <Route path="proposals" element={<Proposals />} />
-          <Route path="activity" element={<Activity />} />
-          <Route path="templates" element={<Templates />} />
-          <Route path="analytics" element={<Analytics />} />
-          <Route path="recurring-payments" element={<RecurringPayments />} />
-          <Route path="settings" element={<Settings />} />
-          <Route path="errors" element={<ErrorDashboard />} />
-        </Route>
-      </Routes>
-      
-      {/* Real-time components */}
-      <OnlineUsers />
-      <LiveUpdates />
-      <RealtimeNotifications />
-      <TypingIndicator />
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/dashboard" element={<DashboardLayout />}>
+            <Route index element={<Overview />} />
+            <Route path="proposals" element={<Proposals />} />
+            <Route path="activity" element={<Activity />} />
+            <Route path="templates" element={<Templates />} />
+            <Route path="analytics" element={<Analytics />} />
+            <Route path="recurring-payments" element={<RecurringPayments />} />
+            <Route path="settings" element={<Settings />} />
+            <Route path="errors" element={<ErrorDashboard />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }
 

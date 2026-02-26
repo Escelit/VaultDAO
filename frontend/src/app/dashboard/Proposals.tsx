@@ -9,9 +9,10 @@ import ConfirmationModal from '../../components/modals/ConfirmationModal';
 import ProposalFilters, { type FilterState } from '../../components/proposals/ProposalFilters';
 import { useToast } from '../../hooks/useToast';
 import { useVaultContract } from '../../hooks/useVaultContract';
-import { useWallet } from '../../context/WalletContextProps';
+import { useWallet } from '../../hooks/useWallet';
 import type { TokenInfo, TokenBalance } from '../../types';
 import { DEFAULT_TOKENS } from '../../constants/tokens';
+import VoiceCommands from '../../components/VoiceCommands';
 
 const CopyButton = ({ text }: { text: string }) => (
   <button
@@ -464,6 +465,12 @@ const Proposals: React.FC = () => {
         />
         <ProposalDetailModal isOpen={!!selectedProposal} onClose={() => setSelectedProposal(null)} proposal={selectedProposal} />
         <ConfirmationModal isOpen={showRejectModal} title="Reject Proposal" message="Are you sure you want to reject this?" onConfirm={handleRejectConfirm} onCancel={() => setShowRejectModal(false)} showReasonInput={true} isDestructive={true} />
+        
+        <VoiceCommands 
+          onCreateProposal={() => setShowNewProposalModal(true)}
+          onApprove={() => selectedProposal && handleApprove(selectedProposal.id, {} as React.MouseEvent)}
+          onReject={() => selectedProposal && setShowRejectModal(true)}
+        />
       </div>
     </div>
   );
