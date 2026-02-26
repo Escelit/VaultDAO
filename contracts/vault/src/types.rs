@@ -76,6 +76,8 @@ pub struct InitConfig {
     pub post_execution_hooks: Vec<Address>,
     /// Default voting deadline in ledgers (0 = no deadline)
     pub default_voting_deadline: u64,
+    /// Addresses allowed to veto proposals.
+    pub veto_addresses: Vec<Address>,
     /// Retry configuration for failed executions
     pub retry_config: RetryConfig,
     /// Recovery configuration
@@ -116,6 +118,8 @@ pub struct Config {
     pub post_execution_hooks: Vec<Address>,
     /// Default voting deadline in ledgers (0 = no deadline)
     pub default_voting_deadline: u64,
+    /// Addresses allowed to veto proposals.
+    pub veto_addresses: Vec<Address>,
     /// Retry configuration for failed executions
     pub retry_config: RetryConfig,
     /// Recovery configuration

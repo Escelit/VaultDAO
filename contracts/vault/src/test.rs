@@ -34,6 +34,7 @@ fn default_init_config(
         },
         threshold_strategy: ThresholdStrategy::Fixed,
         default_voting_deadline: 0,
+        veto_addresses: Vec::new(_env),
         retry_config: RetryConfig {
             enabled: false,
             max_retries: 0,
@@ -83,6 +84,7 @@ fn test_multisig_approval() {
             window: 3600,
         },
         threshold_strategy: ThresholdStrategy::Fixed,
+        veto_addresses: Vec::new(&env),
         retry_config: RetryConfig {
             enabled: false,
             max_retries: 0,
@@ -160,6 +162,7 @@ fn test_unauthorized_proposal() {
             window: 3600,
         },
         threshold_strategy: ThresholdStrategy::Fixed,
+        veto_addresses: Vec::new(&env),
         retry_config: RetryConfig {
             enabled: false,
             max_retries: 0,
@@ -224,6 +227,7 @@ fn test_timelock_violation() {
             window: 3600,
         },
         threshold_strategy: ThresholdStrategy::Fixed,
+        veto_addresses: Vec::new(&env),
         retry_config: RetryConfig {
             enabled: false,
             max_retries: 0,
@@ -523,6 +527,7 @@ fn test_priority_levels() {
             window: 3600,
         },
         threshold_strategy: ThresholdStrategy::Fixed,
+        veto_addresses: Vec::new(&env),
         retry_config: RetryConfig {
             enabled: false,
             max_retries: 0,
@@ -624,6 +629,7 @@ fn test_get_proposals_by_priority() {
             window: 3600,
         },
         threshold_strategy: ThresholdStrategy::Fixed,
+        veto_addresses: Vec::new(&env),
         retry_config: RetryConfig {
             enabled: false,
             max_retries: 0,
@@ -703,6 +709,7 @@ fn test_change_priority_unauthorized() {
             window: 3600,
         },
         threshold_strategy: ThresholdStrategy::Fixed,
+        veto_addresses: Vec::new(&env),
         retry_config: RetryConfig {
             enabled: false,
             max_retries: 0,
@@ -765,6 +772,7 @@ fn test_comment_functionality() {
             window: 3600,
         },
         threshold_strategy: ThresholdStrategy::Fixed,
+        veto_addresses: Vec::new(&env),
         retry_config: RetryConfig {
             enabled: false,
             max_retries: 0,
@@ -853,6 +861,7 @@ fn test_blacklist_mode() {
             window: 3600,
         },
         threshold_strategy: ThresholdStrategy::Fixed,
+        veto_addresses: Vec::new(&env),
         retry_config: RetryConfig {
             enabled: false,
             max_retries: 0,
@@ -934,6 +943,7 @@ fn test_abstention_does_not_count_toward_threshold() {
             window: 3600,
         },
         threshold_strategy: ThresholdStrategy::Fixed,
+        veto_addresses: Vec::new(&env),
         retry_config: RetryConfig {
             enabled: false,
             max_retries: 0,
@@ -1006,6 +1016,7 @@ fn test_list_management() {
             window: 3600,
         },
         threshold_strategy: ThresholdStrategy::Fixed,
+        veto_addresses: Vec::new(&env),
         retry_config: RetryConfig {
             enabled: false,
             max_retries: 0,
@@ -1067,6 +1078,7 @@ fn test_cannot_abstain_after_voting() {
             window: 3600,
         },
         threshold_strategy: ThresholdStrategy::Fixed,
+        veto_addresses: Vec::new(&env),
         retry_config: RetryConfig {
             enabled: false,
             max_retries: 0,
@@ -1132,6 +1144,7 @@ fn test_cannot_abstain_twice() {
             window: 3600,
         },
         threshold_strategy: ThresholdStrategy::Fixed,
+        veto_addresses: Vec::new(&env),
         retry_config: RetryConfig {
             enabled: false,
             max_retries: 0,
@@ -1198,6 +1211,7 @@ fn test_velocity_limit_enforcement() {
             window: 60,
         },
         threshold_strategy: ThresholdStrategy::Fixed,
+        veto_addresses: Vec::new(&env),
         retry_config: RetryConfig {
             enabled: false,
             max_retries: 0,
@@ -1283,6 +1297,7 @@ fn test_verify_attachment() {
             window: 3600,
         },
         threshold_strategy: ThresholdStrategy::Fixed,
+        veto_addresses: Vec::new(&env),
         retry_config: RetryConfig {
             enabled: false,
             max_retries: 0,
@@ -1346,6 +1361,7 @@ fn test_remove_attachment() {
             window: 3600,
         },
         threshold_strategy: ThresholdStrategy::Fixed,
+        veto_addresses: Vec::new(&env),
         retry_config: RetryConfig {
             enabled: false,
             max_retries: 0,
@@ -1415,6 +1431,7 @@ fn test_attachment_unauthorized() {
             window: 3600,
         },
         threshold_strategy: ThresholdStrategy::Fixed,
+        veto_addresses: Vec::new(&env),
         retry_config: RetryConfig {
             enabled: false,
             max_retries: 0,
@@ -1481,6 +1498,7 @@ fn test_attachment_duplicate() {
             window: 3600,
         },
         threshold_strategy: ThresholdStrategy::Fixed,
+        veto_addresses: Vec::new(&env),
         retry_config: RetryConfig {
             enabled: false,
             max_retries: 0,
@@ -1547,6 +1565,7 @@ fn test_attachment_invalid_hash() {
             window: 3600,
         },
         threshold_strategy: ThresholdStrategy::Fixed,
+        veto_addresses: Vec::new(&env),
         retry_config: RetryConfig {
             enabled: false,
             max_retries: 0,
@@ -1610,6 +1629,7 @@ fn test_admin_can_add_attachment() {
             window: 3600,
         },
         threshold_strategy: ThresholdStrategy::Fixed,
+        veto_addresses: Vec::new(&env),
         retry_config: RetryConfig {
             enabled: false,
             max_retries: 0,
@@ -1673,6 +1693,7 @@ fn test_set_and_get_proposal_metadata() {
             window: 3600,
         },
         threshold_strategy: ThresholdStrategy::Fixed,
+        veto_addresses: Vec::new(&env),
         retry_config: RetryConfig {
             enabled: false,
             max_retries: 0,
@@ -2295,6 +2316,7 @@ fn test_fixed_threshold_strategy() {
             window: 3600,
         },
         threshold_strategy: ThresholdStrategy::Fixed,
+        veto_addresses: Vec::new(&env),
         retry_config: RetryConfig {
             enabled: false,
             max_retries: 0,
@@ -2528,6 +2550,7 @@ fn test_condition_balance_above() {
             window: 3600,
         },
         threshold_strategy: ThresholdStrategy::Fixed,
+        veto_addresses: Vec::new(&env),
         retry_config: RetryConfig {
             enabled: false,
             max_retries: 0,
@@ -7634,6 +7657,7 @@ fn test_staking_requirement_and_locking() {
         },
         threshold_strategy: ThresholdStrategy::Fixed,
         default_voting_deadline: 0,
+        veto_addresses: Vec::new(&env),
         retry_config: RetryConfig {
             enabled: false,
             max_retries: 0,
@@ -7721,6 +7745,7 @@ fn test_stake_refund_on_successful_execution() {
         },
         threshold_strategy: ThresholdStrategy::Fixed,
         default_voting_deadline: 0,
+        veto_addresses: Vec::new(&env),
         retry_config: RetryConfig {
             enabled: false,
             max_retries: 0,
@@ -7971,6 +7996,7 @@ fn test_time_weighted_voting_disabled() {
         },
         threshold_strategy: ThresholdStrategy::Fixed,
         default_voting_deadline: 0,
+        veto_addresses: Vec::new(&env),
         retry_config: RetryConfig {
             enabled: false,
             max_retries: 0,
@@ -7979,7 +8005,6 @@ fn test_time_weighted_voting_disabled() {
         recovery_config: crate::types::RecoveryConfig::default(&env),
         staking_config,
     };
-
     client.initialize(&admin, &config);
     client.set_role(&admin, &proposer, &Role::Treasurer);
 
@@ -8131,7 +8156,7 @@ fn test_update_staking_config() {
 
     let config = InitConfig {
         signers,
-        threshold: 1,
+        threshold: 2,
         quorum: 0,
         spending_limit: 10_000,
         daily_limit: 50_000,
@@ -8144,6 +8169,7 @@ fn test_update_staking_config() {
         },
         threshold_strategy: ThresholdStrategy::Fixed,
         default_voting_deadline: 0,
+        veto_addresses,
         retry_config: RetryConfig {
             enabled: false,
             max_retries: 0,
@@ -8152,8 +8178,9 @@ fn test_update_staking_config() {
         recovery_config: crate::types::RecoveryConfig::default(&env),
         staking_config: initial_staking_config,
     };
-
     client.initialize(&admin, &config);
+    client.set_role(&admin, &signer1, &Role::Treasurer);
+    client.set_role(&admin, &signer2, &Role::Treasurer);
 
     // Update staking config
     let new_staking_config = types::StakingConfig {
