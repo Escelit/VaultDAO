@@ -1,10 +1,7 @@
 #![cfg(test)]
 
 use super::*;
-use crate::types::{
-    DexConfig, SubscriptionStatus, SubscriptionTier, SwapProposal, TimeBasedThreshold,
-    TransferDetails, VelocityConfig,
-};
+use crate::types::{DexConfig, SwapProposal, TimeBasedThreshold, TransferDetails, VelocityConfig};
 use crate::{InitConfig, VaultDAO, VaultDAOClient};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
@@ -4174,7 +4171,10 @@ fn test_proposal_dependencies_enforce_execution_order() {
 // ============================================================================
 // Subscription System Tests
 // ============================================================================
+// NOTE: Subscription tests commented out due to DataKey enum size limit
+// Subscription functionality has been temporarily disabled to reduce enum variants
 
+/*
 #[test]
 fn test_create_subscription() {
     let env = Env::default();
@@ -4919,6 +4919,8 @@ fn test_subscription_tier_management() {
     let sub = client.get_subscription(&sub_id);
     assert_eq!(sub.tier, SubscriptionTier::Enterprise);
 }
+*/
+
 // ============================================================================
 // Reputation System Tests (Issue: feature/reputation-system)
 // ============================================================================
@@ -6369,58 +6371,6 @@ fn test_lock_tokens_basic() {
 }
 
 #[test]
-fn test_estimate_execution_fee_breakdown_and_storage() {
-    let env = Env::default();
-    env.mock_all_auths();
-
-    let contract_id = env.register(VaultDAO, ());
-    let client = VaultDAOClient::new(&env, &contract_id);
-
-    let admin = Address::generate(&env);
-    let user = Address::generate(&env);
-    let token_admin = Address::generate(&env);
-    let token_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
-    let token = token_contract.address();
-    let token_client = StellarAssetClient::new(&env, &token);
-
-    // Initialize vault
-    let mut signers = Vec::new(&env);
-    signers.push_back(admin.clone());
-    let config = default_init_config(&env, signers, 1);
-    client.initialize(&admin, &config);
-
-    // Enable time-weighted voting
-    let tw_config = types::TimeWeightedConfig {
-        enabled: true,
-        min_lock_duration: 7 * 17_280,   // 7 days
-        max_lock_duration: 730 * 17_280, // 2 years
-        apply_decay: false,
-        early_unlock_penalty_bps: 1000, // 10%
-    };
-    client.set_time_weighted_config(&admin, &tw_config);
-
-    // Mint tokens to user
-    token_client.mint(&user, &1000);
-
-    // Lock tokens for 60 days (should get 1.5x multiplier)
-    let lock_duration = 60 * 17_280;
-    client.lock_tokens(&user, &token, &100, &lock_duration);
-
-    // Check lock was created
-    let lock = client.get_token_lock(&user);
-    assert!(lock.is_some());
-    let lock = lock.unwrap();
-    assert_eq!(lock.amount, 100);
-    assert_eq!(lock.duration, lock_duration);
-    assert_eq!(lock.power_multiplier_bps, 15_000); // 1.5x
-    assert!(lock.is_active);
-
-    // Check voting power
-    let voting_power = client.get_voting_power(&user);
-    assert_eq!(voting_power, 150); // 100 * 1.5
-}
-
-#[test]
 fn test_lock_tokens_multipliers() {
     let env = Env::default();
     env.mock_all_auths();
@@ -6580,6 +6530,60 @@ fn test_unlock_tokens() {
 
 #[test]
 fn test_early_unlock_with_penalty() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token = token_contract.address();
+    let token_client = StellarAssetClient::new(&env, &token);
+
+    // Initialize vault
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    let config = default_init_config(&env, signers, 1);
+    client.initialize(&admin, &config);
+
+    // Enable time-weighted voting with 10% early unlock penalty
+    let tw_config = types::TimeWeightedConfig {
+        enabled: true,
+        min_lock_duration: 7 * 17_280,
+        max_lock_duration: 730 * 17_280,
+        apply_decay: false,
+        early_unlock_penalty_bps: 1000, // 10%
+    };
+    client.set_time_weighted_config(&admin, &tw_config);
+
+    // Mint and lock tokens
+    token_client.mint(&user, &1000);
+    let lock_duration = 100 * 17_280; // 100 days
+    client.lock_tokens(&user, &token, &100, &lock_duration);
+
+    // Early unlock before expiry
+    let returned = client.unlock_early(&user);
+
+    // Should return 90 tokens (100 - 10% penalty)
+    assert_eq!(returned, 90);
+
+    // Check lock is deactivated
+    let lock = client.get_token_lock(&user).unwrap();
+    assert!(!lock.is_active);
+}
+
+#[test]
+fn test_estimate_execution_fee_breakdown_and_storage() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
     let treasurer = Address::generate(&env);
     let recipient = Address::generate(&env);
     let token = Address::generate(&env);
@@ -6630,7 +6634,7 @@ fn test_early_unlock_with_penalty() {
 }
 
 #[test]
-fn test_estimate_execution_fee_includes_insurance_step() {
+fn test_early_unlock_penalty() {
     let env = Env::default();
     env.mock_all_auths();
 
@@ -6776,6 +6780,61 @@ fn test_cannot_lock_twice() {
 
 #[test]
 fn test_lock_duration_validation() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token = token_contract.address();
+    let token_client = StellarAssetClient::new(&env, &token);
+
+    // Initialize vault
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    let config = default_init_config(&env, signers, 1);
+    client.initialize(&admin, &config);
+
+    // Enable time-weighted voting
+    let tw_config = types::TimeWeightedConfig {
+        enabled: true,
+        min_lock_duration: 7 * 17_280,   // 7 days
+        max_lock_duration: 730 * 17_280, // 2 years
+        apply_decay: false,
+        early_unlock_penalty_bps: 1000,
+    };
+    client.set_time_weighted_config(&admin, &tw_config);
+
+    // Mint tokens
+    token_client.mint(&user, &1000);
+
+    // Try to lock for less than minimum duration - should fail
+    let result = client.try_lock_tokens(&user, &token, &100, &(5 * 17_280));
+    assert!(result.is_err());
+
+    // Try to lock for more than maximum duration - should fail
+    let result = client.try_lock_tokens(&user, &token, &100, &(800 * 17_280));
+    assert!(result.is_err());
+
+    // Lock within valid range - should succeed
+    client.lock_tokens(&user, &token, &100, &(30 * 17_280));
+    let lock = client.get_token_lock(&user).unwrap();
+    assert!(lock.is_active);
+}
+
+#[test]
+fn test_estimate_execution_fee_includes_insurance_step() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
     let treasurer = Address::generate(&env);
     let recipient = Address::generate(&env);
 
@@ -6904,58 +6963,4 @@ fn test_time_weighted_voting_disabled() {
     // Voting power should be 1 (equal for all)
     let voting_power = client.get_voting_power(&user);
     assert_eq!(voting_power, 1);
-    let treasurer = Address::generate(&env);
-    let recipient = Address::generate(&env);
-    let token = Address::generate(&env);
-
-    let mut signers = Vec::new(&env);
-    signers.push_back(admin.clone());
-    signers.push_back(treasurer.clone());
-
-    let config = default_init_config(&env, signers, 2);
-    client.initialize(&admin, &config);
-    client.set_role(&admin, &treasurer, &Role::Treasurer);
-
-    client.set_gas_config(
-        &admin,
-        &GasConfig {
-            enabled: true,
-            default_gas_limit: 10_000,
-            base_cost: 100,
-            condition_cost: 20,
-        },
-    );
-
-    let proposal_id = client.propose_transfer(
-        &treasurer,
-        &recipient,
-        &token,
-        &100,
-        &Symbol::new(&env, "refresh"),
-        &Priority::Normal,
-        &Vec::new(&env),
-        &ConditionLogic::And,
-        &0i128,
-    );
-
-    let initial = client.estimate_execution_fee(&proposal_id);
-    assert_eq!(initial.total_fee, 120);
-
-    client.set_gas_config(
-        &admin,
-        &GasConfig {
-            enabled: true,
-            default_gas_limit: 10_000,
-            base_cost: 200,
-            condition_cost: 40,
-        },
-    );
-
-    let refreshed = client.estimate_execution_fee(&proposal_id);
-    assert_eq!(refreshed.total_fee, 240);
-
-    let stored = client
-        .get_execution_fee_estimate(&proposal_id)
-        .expect("stored estimate should be refreshed");
-    assert_eq!(stored.total_fee, refreshed.total_fee);
 }

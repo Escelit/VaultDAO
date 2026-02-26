@@ -523,6 +523,7 @@ pub fn emit_retries_exhausted(env: &Env, proposal_id: u64, total_attempts: u32) 
 // ============================================================================
 
 /// Emit when a new subscription is created
+#[allow(dead_code)]
 pub fn emit_subscription_created(
     env: &Env,
     subscription_id: u64,
@@ -537,6 +538,7 @@ pub fn emit_subscription_created(
 }
 
 /// Emit when a subscription is renewed
+#[allow(dead_code)]
 pub fn emit_subscription_renewed(
     env: &Env,
     subscription_id: u64,
@@ -550,6 +552,7 @@ pub fn emit_subscription_renewed(
 }
 
 /// Emit when a subscription is cancelled
+#[allow(dead_code)]
 pub fn emit_subscription_cancelled(env: &Env, subscription_id: u64, cancelled_by: &Address) {
     env.events().publish(
         (Symbol::new(env, "subscription_cancelled"), subscription_id),
@@ -558,6 +561,7 @@ pub fn emit_subscription_cancelled(env: &Env, subscription_id: u64, cancelled_by
 }
 
 /// Emit when a subscription tier is upgraded
+#[allow(dead_code)]
 pub fn emit_subscription_upgraded(
     env: &Env,
     subscription_id: u64,

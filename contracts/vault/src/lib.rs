@@ -1582,6 +1582,7 @@ impl VaultDAO {
         Ok(())
     }
 
+    /*
     // ========================================================================
     // Subscription System
     // ========================================================================
@@ -1792,6 +1793,7 @@ impl VaultDAO {
     pub fn get_subscriber_subscriptions(env: Env, subscriber: Address) -> Vec<u64> {
         storage::get_subscriber_subscriptions(&env, &subscriber)
     }
+    */
 
     // ========================================================================
     // Recipient List Management
