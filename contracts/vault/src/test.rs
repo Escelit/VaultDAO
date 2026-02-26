@@ -3,8 +3,8 @@
 use super::*;
 use crate::types::{
     CrossVaultConfig, CrossVaultStatus, DexConfig, DisputeResolution, DisputeStatus, FeeStructure,
-    FeeTier, RetryConfig, SwapProposal, TimeBasedThreshold, TransferDetails, VaultAction,
-    VelocityConfig,
+    FeeTier, RetryConfig, SubscriptionStatus, SubscriptionTier, SwapProposal, TimeBasedThreshold,
+    TransferDetails, VaultAction, VelocityConfig,
 };
 use crate::{InitConfig, VaultDAO, VaultDAOClient};
 use soroban_sdk::{
@@ -162,7 +162,8 @@ fn test_unauthorized_proposal() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
 
     let res = client.try_propose_transfer(
@@ -221,7 +222,8 @@ fn test_timelock_violation() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -499,7 +501,8 @@ fn test_priority_levels() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -595,7 +598,8 @@ fn test_get_proposals_by_priority() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -669,7 +673,8 @@ fn test_change_priority_unauthorized() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -726,7 +731,8 @@ fn test_comment_functionality() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -809,7 +815,8 @@ fn test_blacklist_mode() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &treasurer, &Role::Treasurer);
 
@@ -885,7 +892,8 @@ fn test_abstention_does_not_count_toward_threshold() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
     client.set_role(&admin, &signer2, &Role::Treasurer);
@@ -956,7 +964,8 @@ fn test_list_management() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
 
     client.set_list_mode(&admin, &ListMode::Whitelist);
@@ -1012,7 +1021,8 @@ fn test_cannot_abstain_after_voting() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -1072,7 +1082,8 @@ fn test_cannot_abstain_twice() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -1133,7 +1144,8 @@ fn test_velocity_limit_enforcement() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer, &Role::Treasurer);
 
@@ -1213,7 +1225,8 @@ fn test_verify_attachment() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -1271,7 +1284,8 @@ fn test_remove_attachment() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -1335,7 +1349,8 @@ fn test_attachment_unauthorized() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
     client.set_role(&admin, &signer2, &Role::Treasurer);
@@ -1396,7 +1411,8 @@ fn test_attachment_duplicate() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -1457,7 +1473,8 @@ fn test_attachment_invalid_hash() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -1515,7 +1532,8 @@ fn test_admin_can_add_attachment() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -1573,7 +1591,8 @@ fn test_set_and_get_proposal_metadata() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -1639,7 +1658,8 @@ fn test_remove_proposal_metadata() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -1704,7 +1724,8 @@ fn test_proposal_metadata_unauthorized() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
     client.set_role(&admin, &signer2, &Role::Treasurer);
@@ -2148,7 +2169,8 @@ fn test_fixed_threshold_strategy() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
     client.set_role(&admin, &signer2, &Role::Treasurer);
@@ -2217,7 +2239,8 @@ fn test_percentage_threshold_strategy() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
     client.set_role(&admin, &signer2, &Role::Treasurer);
@@ -2297,7 +2320,8 @@ fn test_time_based_threshold_strategy() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
     client.set_role(&admin, &signer2, &Role::Treasurer);
@@ -2366,7 +2390,8 @@ fn test_condition_balance_above() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -2432,7 +2457,8 @@ fn test_condition_date_after() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
     client.set_role(&admin, &signer2, &Role::Treasurer);
@@ -2509,7 +2535,8 @@ fn test_condition_multiple_and_logic() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
     client.set_role(&admin, &signer2, &Role::Treasurer);
@@ -2592,7 +2619,8 @@ fn test_condition_multiple_or_logic() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
     client.set_role(&admin, &signer2, &Role::Treasurer);
@@ -2668,7 +2696,8 @@ fn test_condition_no_conditions() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -2733,7 +2762,8 @@ fn test_dex_config_setup() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
 
     let mut enabled_dexs = Vec::new(&env);
@@ -2795,7 +2825,8 @@ fn test_swap_proposal_creation() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &treasurer, &Role::Treasurer);
 
@@ -2863,7 +2894,8 @@ fn test_dex_not_enabled_error() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &treasurer, &Role::Treasurer);
 
@@ -2918,7 +2950,8 @@ fn test_batch_propose_multi_token() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &treasurer, &Role::Treasurer);
 
@@ -2997,7 +3030,8 @@ fn test_batch_propose_exceeds_max_size() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &treasurer, &Role::Treasurer);
 
@@ -3066,7 +3100,8 @@ fn test_quorum_disabled_behaves_like_fixed_threshold() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -3135,7 +3170,8 @@ fn test_quorum_blocks_approval_until_satisfied() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
     client.set_role(&admin, &signer2, &Role::Treasurer);
@@ -3225,7 +3261,8 @@ fn test_abstentions_count_toward_quorum_but_not_threshold() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
     client.set_role(&admin, &signer2, &Role::Treasurer);
@@ -3315,7 +3352,8 @@ fn test_get_quorum_status() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
     client.set_role(&admin, &signer2, &Role::Treasurer);
@@ -3392,7 +3430,8 @@ fn test_get_quorum_status_quorum_disabled() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -3451,7 +3490,8 @@ fn test_update_quorum() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
 
     // Admin can update quorum to a valid value
@@ -3507,7 +3547,8 @@ fn test_execution_rechecks_quorum_requirement() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -3576,7 +3617,8 @@ fn test_batch_execution_rechecks_quorum_requirement() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -3651,7 +3693,8 @@ fn test_quorum_satisfied_by_approvals_alone() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
     client.set_role(&admin, &signer2, &Role::Treasurer);
@@ -3716,7 +3759,8 @@ fn test_initialize_rejects_quorum_too_high() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
 
     let result = client.try_initialize(&admin, &config);
     assert_eq!(result.err(), Some(Ok(VaultError::QuorumTooHigh)));
@@ -3771,7 +3815,8 @@ macro_rules! setup_retry_test {
                 initial_backoff_ledgers: 10,
             },
             recovery_config: crate::types::RecoveryConfig::default(&$env),
-        };
+                staking_config: types::StakingConfig::default(),
+            };
 
         $client.initialize(&$admin, &config);
         $client.set_role(&$admin, &$signer1, &Role::Treasurer);
@@ -3963,7 +4008,8 @@ fn test_retry_not_enabled_passes_through_error() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
 
     client.initialize(&admin, &config);
     client.set_role(&admin, &admin, &Role::Treasurer);
@@ -4065,7 +4111,8 @@ fn test_retry_disabled_rejects_retry_execution() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
 
     client.initialize(&admin, &config);
 
@@ -4482,7 +4529,8 @@ fn test_cross_vault_multi_vault_actions() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
 
     // Initialize all vaults
     coordinator.initialize(&admin, &config);
@@ -4960,7 +5008,8 @@ fn test_reputation_initialized_at_neutral() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &proposer, &Role::Treasurer);
 
@@ -5013,7 +5062,8 @@ fn test_reputation_increases_on_proposal_creation() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &proposer, &Role::Treasurer);
 
@@ -5076,7 +5126,8 @@ fn test_reputation_increases_on_approval() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &proposer, &Role::Treasurer);
     client.set_role(&admin, &approver, &Role::Treasurer);
@@ -5144,7 +5195,8 @@ fn test_participation_tracking_on_abstention() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
 
     let proposal_id = client.propose_transfer(
@@ -5208,7 +5260,8 @@ fn test_reputation_increases_on_execution() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &proposer, &Role::Treasurer);
     client.set_role(&admin, &signer, &Role::Treasurer);
@@ -5276,7 +5329,8 @@ fn test_reputation_decreases_on_rejection() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &proposer, &Role::Treasurer);
     client.set_role(&admin, &proposer2, &Role::Treasurer);
@@ -5342,7 +5396,8 @@ fn test_reputation_decay_over_time() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &proposer, &Role::Treasurer);
 
@@ -5422,7 +5477,8 @@ fn test_create_from_template_with_overrides() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &treasurer, &Role::Treasurer);
 
@@ -5499,7 +5555,8 @@ fn test_create_from_template_amount_out_of_range() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &treasurer, &Role::Treasurer);
 
@@ -5585,7 +5642,8 @@ fn test_create_from_inactive_template() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
 
     client.initialize(&admin, &config);
     client.set_role(&admin, &treasurer, &Role::Treasurer);
@@ -5660,7 +5718,8 @@ fn test_reputation_based_spending_limit() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &proposer, &Role::Treasurer);
 
@@ -5734,7 +5793,8 @@ fn test_reputation_high_score_get_limits_boost() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &treasurer, &Role::Treasurer);
 
@@ -5802,7 +5862,8 @@ fn test_template_not_found() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
 
     // Try to get non-existent template
@@ -5868,7 +5929,8 @@ fn test_retry_not_enabled() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &proposer, &Role::Treasurer);
     client.set_role(&admin, &signer, &Role::Treasurer);
@@ -6073,7 +6135,8 @@ fn test_insurance_posting_and_refund() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &proposer, &Role::Treasurer);
     client.set_role(&admin, &signer2, &Role::Treasurer);
@@ -6174,7 +6237,8 @@ fn test_insurance_slashing_on_rejection() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &proposer, &Role::Treasurer);
 
@@ -6263,7 +6327,8 @@ fn test_insurance_pool_withdrawal() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &proposer, &Role::Treasurer);
 
@@ -6401,7 +6466,7 @@ fn test_fee_calculation_base_rate() {
     client.set_fee_structure(&admin, &fee_structure);
 
     // Calculate fee for 1000 stroops
-    let fee_calc = client.calculate_fee(&user, &token, &1000);
+    let fee_calc = client.calculate_fee_public(&user, &token, &1000);
 
     // Expected: 1000 * 50 / 10000 = 5 stroops
     assert_eq!(fee_calc.base_fee, 5);
@@ -6452,7 +6517,7 @@ fn test_fee_calculation_volume_tiers() {
     client.set_fee_structure(&admin, &fee_structure);
 
     // Test base rate (no volume yet)
-    let fee_calc = client.calculate_fee(&user, &token, &100);
+    let fee_calc = client.calculate_fee_public(&user, &token, &100);
     assert_eq!(fee_calc.fee_bps, 50); // Base rate
 
     // Note: In a real scenario, we would need to execute transactions
@@ -6499,7 +6564,7 @@ fn test_fee_calculation_reputation_discount() {
     // (In a real test, we'd need to go through the full proposal lifecycle)
 
     // For now, just verify the fee calculation logic
-    let fee_calc = client.calculate_fee(&high_rep_user, &token, &1000);
+    let fee_calc = client.calculate_fee_public(&high_rep_user, &token, &1000);
 
     // Base fee: 1000 * 100 / 10000 = 10
     assert_eq!(fee_calc.base_fee, 10);
@@ -6540,7 +6605,7 @@ fn test_fee_disabled() {
     client.set_fee_structure(&admin, &fee_structure);
 
     // Calculate fee - should be zero
-    let fee_calc = client.calculate_fee(&user, &token, &1000);
+    let fee_calc = client.calculate_fee_public(&user, &token, &1000);
     assert_eq!(fee_calc.final_fee, 0);
     assert_eq!(fee_calc.base_fee, 0);
 }
@@ -6821,7 +6886,9 @@ fn test_stake_refund_on_successful_execution() {
     token_client.mint(&proposer, &10_000);
     token_client.mint(&contract_id, &100_000);
 
-    let proposer_balance_before = token_client.balance(&proposer);
+    // Create token client for balance checks
+    let token_balance_client = soroban_sdk::token::Client::new(&env, &token.address());
+    let proposer_balance_before = token_balance_client.balance(&proposer);
 
     // Propose and approve
     let proposal_id = client.propose_transfer(
@@ -6848,7 +6915,7 @@ fn test_stake_refund_on_successful_execution() {
     assert_eq!(record.slashed_amount, 0);
 
     // Verify proposer got stake back (balance should be initial - stake + stake = initial)
-    let proposer_balance_after = token_client.balance(&proposer);
+    let proposer_balance_after = token_balance_client.balance(&proposer);
     assert_eq!(proposer_balance_after, proposer_balance_before);
 }
 
@@ -6912,7 +6979,9 @@ fn test_stake_slashing_on_rejection() {
     token_client.mint(&proposer, &10_000);
     token_client.mint(&contract_id, &100_000);
 
-    let proposer_balance_before = token_client.balance(&proposer);
+    // Create token client for balance checks
+    let token_balance_client = soroban_sdk::token::Client::new(&env, &token.address());
+    let proposer_balance_before = token_balance_client.balance(&proposer);
 
     // Propose transfer (stake = 50)
     let proposal_id = client.propose_transfer(
@@ -6943,7 +7012,7 @@ fn test_stake_slashing_on_rejection() {
     assert_eq!(stake_pool, 25);
 
     // Verify proposer got partial refund (50% = 25)
-    let proposer_balance_after = token_client.balance(&proposer);
+    let proposer_balance_after = token_balance_client.balance(&proposer);
     assert_eq!(proposer_balance_after, proposer_balance_before - 25);
 }
 
@@ -7112,15 +7181,18 @@ fn test_stake_pool_management() {
     let stake_pool_before = client.get_stake_pool(&token.address());
     assert_eq!(stake_pool_before, 25); // 50% of 50
 
+    // Create token client for balance checks
+    let token_balance_client = soroban_sdk::token::Client::new(&env, &token.address());
+
     // Admin withdraws from stake pool
-    let treasury_balance_before = token_client.balance(&treasury);
+    let treasury_balance_before = token_balance_client.balance(&treasury);
     client.withdraw_stake_pool(&admin, &token.address(), &treasury, &10);
 
     // Verify withdrawal
     let stake_pool_after = client.get_stake_pool(&token.address());
     assert_eq!(stake_pool_after, 15); // 25 - 10
 
-    let treasury_balance_after = token_client.balance(&treasury);
+    let treasury_balance_after = token_balance_client.balance(&treasury);
     assert_eq!(treasury_balance_after, treasury_balance_before + 10);
 }
 

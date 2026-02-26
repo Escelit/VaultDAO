@@ -112,13 +112,14 @@ impl VaultDAO {
             threshold_strategy: config.threshold_strategy,
             default_voting_deadline: config.default_voting_deadline,
             retry_config: config.retry_config,
-            recovery_config: config.recovery_config,
-            staking_config: config.staking_config,
+            recovery_config: config.recovery_config.clone(),
+            staking_config: config.staking_config.clone(),
         };
 
         // Store state
         storage::set_config(&env, &config_storage);
         storage::set_role(&env, &admin, Role::Admin);
+        storage::set_staking_config(&env, &config.staking_config);
         storage::set_initialized(&env);
         storage::extend_instance_ttl(&env);
 
@@ -344,20 +345,6 @@ impl VaultDAO {
             // Lock stake tokens in vault
             if actual_stake > 0 {
                 token::transfer_to_vault(&env, &token_addr, &proposer, actual_stake);
-                
-                // Create stake record
-                let stake_record = types::StakeRecord {
-                    proposal_id,
-                    staker: proposer.clone(),
-                    token: token_addr.clone(),
-                    amount: actual_stake,
-                    locked_at: current_ledger,
-                    refunded: false,
-                    slashed: false,
-                    slashed_amount: 0,
-                    released_at: 0,
-                };
-                storage::set_stake_record(&env, &stake_record);
             }
         }
 
@@ -369,6 +356,22 @@ impl VaultDAO {
         let proposal_id = storage::increment_proposal_id(&env);
         Self::validate_dependencies(&env, proposal_id, &depends_on)?;
         let current_ledger = env.ledger().sequence() as u64;
+
+        // Create stake record after proposal_id is generated
+        if actual_stake > 0 {
+            let stake_record = types::StakeRecord {
+                proposal_id,
+                staker: proposer.clone(),
+                token: token_addr.clone(),
+                amount: actual_stake,
+                locked_at: current_ledger,
+                refunded: false,
+                slashed: false,
+                slashed_amount: 0,
+                released_at: 0,
+            };
+            storage::set_stake_record(&env, &stake_record);
+        }
 
         // Gas limit: derive from GasConfig (0 = unlimited)
         let gas_cfg = storage::get_gas_config(&env);

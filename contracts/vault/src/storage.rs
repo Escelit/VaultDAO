@@ -28,7 +28,7 @@ use crate::types::{
     Subscription, SubscriptionPayment, VaultMetrics, VelocityConfig,
 };
 
-/// Storage key definitions
+/// Core storage key definitions (kept minimal to avoid size limits)
 #[contracttype]
 #[derive(Clone)]
 pub enum DataKey {
@@ -76,6 +76,12 @@ pub enum DataKey {
     Attachments(u64),
     /// Reputation record per address -> Reputation
     Reputation(Address),
+}
+
+/// Feature-specific storage keys (split to avoid enum size limits)
+#[contracttype]
+#[derive(Clone)]
+pub enum FeatureKey {
     /// Insurance configuration -> InsuranceConfig
     InsuranceConfig,
     /// Per-user notification preferences -> NotificationPreferences
@@ -682,7 +688,7 @@ pub fn apply_reputation_decay(env: &Env, rep: &mut Reputation) {
 pub fn get_insurance_config(env: &Env) -> InsuranceConfig {
     env.storage()
         .instance()
-        .get(&DataKey::InsuranceConfig)
+        .get(&FeatureKey::InsuranceConfig)
         .unwrap_or(InsuranceConfig {
             enabled: false,
             min_amount: 0,
@@ -694,19 +700,19 @@ pub fn get_insurance_config(env: &Env) -> InsuranceConfig {
 pub fn set_insurance_config(env: &Env, config: &InsuranceConfig) {
     env.storage()
         .instance()
-        .set(&DataKey::InsuranceConfig, config);
+        .set(&FeatureKey::InsuranceConfig, config);
 }
 
 pub fn get_insurance_pool(env: &Env, token_addr: &Address) -> i128 {
     env.storage()
         .persistent()
-        .get(&DataKey::InsurancePool(token_addr.clone()))
+        .get(&FeatureKey::InsurancePool(token_addr.clone()))
         .unwrap_or(0)
 }
 
 pub fn add_to_insurance_pool(env: &Env, token_addr: &Address, amount: i128) {
     let current = get_insurance_pool(env, token_addr);
-    let key = DataKey::InsurancePool(token_addr.clone());
+    let key = FeatureKey::InsurancePool(token_addr.clone());
     env.storage().persistent().set(&key, &(current + amount));
     // extend TTL
     env.storage()
@@ -717,7 +723,7 @@ pub fn add_to_insurance_pool(env: &Env, token_addr: &Address, amount: i128) {
 #[allow(dead_code)]
 pub fn subtract_from_insurance_pool(env: &Env, token_addr: &Address, amount: i128) {
     let current = get_insurance_pool(env, token_addr);
-    let key = DataKey::InsurancePool(token_addr.clone());
+    let key = FeatureKey::InsurancePool(token_addr.clone());
     env.storage()
         .persistent()
         .set(&key, &(current.saturating_sub(amount).max(0)));
@@ -733,12 +739,12 @@ pub fn subtract_from_insurance_pool(env: &Env, token_addr: &Address, amount: i12
 pub fn get_notification_prefs(env: &Env, addr: &Address) -> NotificationPreferences {
     env.storage()
         .persistent()
-        .get(&DataKey::NotificationPrefs(addr.clone()))
+        .get(&FeatureKey::NotificationPrefs(addr.clone()))
         .unwrap_or_else(NotificationPreferences::default)
 }
 
 pub fn set_notification_prefs(env: &Env, addr: &Address, prefs: &NotificationPreferences) {
-    let key = DataKey::NotificationPrefs(addr.clone());
+    let key = FeatureKey::NotificationPrefs(addr.clone());
     env.storage().persistent().set(&key, prefs);
     env.storage()
         .persistent()
@@ -752,15 +758,15 @@ pub fn set_notification_prefs(env: &Env, addr: &Address, prefs: &NotificationPre
 use crate::types::{DexConfig, SwapProposal, SwapResult};
 
 pub fn set_dex_config(env: &Env, config: &DexConfig) {
-    env.storage().instance().set(&DataKey::DexConfig, config);
+    env.storage().instance().set(&FeatureKey::DexConfig, config);
 }
 
 pub fn get_dex_config(env: &Env) -> Option<DexConfig> {
-    env.storage().instance().get(&DataKey::DexConfig)
+    env.storage().instance().get(&FeatureKey::DexConfig)
 }
 
 pub fn set_swap_proposal(env: &Env, proposal_id: u64, swap: &SwapProposal) {
-    let key = DataKey::SwapProposal(proposal_id);
+    let key = FeatureKey::SwapProposal(proposal_id);
     env.storage().persistent().set(&key, swap);
     env.storage()
         .persistent()
@@ -770,11 +776,11 @@ pub fn set_swap_proposal(env: &Env, proposal_id: u64, swap: &SwapProposal) {
 pub fn get_swap_proposal(env: &Env, proposal_id: u64) -> Option<SwapProposal> {
     env.storage()
         .persistent()
-        .get(&DataKey::SwapProposal(proposal_id))
+        .get(&FeatureKey::SwapProposal(proposal_id))
 }
 
 pub fn set_swap_result(env: &Env, proposal_id: u64, result: &SwapResult) {
-    let key = DataKey::SwapResult(proposal_id);
+    let key = FeatureKey::SwapResult(proposal_id);
     env.storage().persistent().set(&key, result);
     env.storage()
         .persistent()
@@ -784,7 +790,7 @@ pub fn set_swap_result(env: &Env, proposal_id: u64, result: &SwapResult) {
 pub fn get_swap_result(env: &Env, proposal_id: u64) -> Option<SwapResult> {
     env.storage()
         .persistent()
-        .get(&DataKey::SwapResult(proposal_id))
+        .get(&FeatureKey::SwapResult(proposal_id))
 }
 
 // ============================================================================
@@ -794,12 +800,12 @@ pub fn get_swap_result(env: &Env, proposal_id: u64) -> Option<SwapResult> {
 pub fn get_gas_config(env: &Env) -> GasConfig {
     env.storage()
         .instance()
-        .get(&DataKey::GasConfig)
+        .get(&FeatureKey::GasConfig)
         .unwrap_or_else(GasConfig::default)
 }
 
 pub fn set_gas_config(env: &Env, config: &GasConfig) {
-    env.storage().instance().set(&DataKey::GasConfig, config);
+    env.storage().instance().set(&FeatureKey::GasConfig, config);
 }
 
 // ============================================================================
@@ -809,12 +815,12 @@ pub fn set_gas_config(env: &Env, config: &GasConfig) {
 pub fn get_metrics(env: &Env) -> VaultMetrics {
     env.storage()
         .instance()
-        .get(&DataKey::Metrics)
+        .get(&FeatureKey::Metrics)
         .unwrap_or_else(VaultMetrics::default)
 }
 
 pub fn set_metrics(env: &Env, metrics: &VaultMetrics) {
-    env.storage().instance().set(&DataKey::Metrics, metrics);
+    env.storage().instance().set(&FeatureKey::Metrics, metrics);
 }
 
 /// Increment proposal counter in metrics
@@ -859,7 +865,7 @@ pub fn metrics_on_expiry(env: &Env) {
 pub fn get_next_template_id(env: &Env) -> u64 {
     env.storage()
         .instance()
-        .get(&DataKey::NextTemplateId)
+        .get(&FeatureKey::NextTemplateId)
         .unwrap_or(1)
 }
 
@@ -868,13 +874,13 @@ pub fn increment_template_id(env: &Env) -> u64 {
     let id = get_next_template_id(env);
     env.storage()
         .instance()
-        .set(&DataKey::NextTemplateId, &(id + 1));
+        .set(&FeatureKey::NextTemplateId, &(id + 1));
     id
 }
 
 /// Store a proposal template
 pub fn set_template(env: &Env, template: &ProposalTemplate) {
-    let key = DataKey::Template(template.id);
+    let key = FeatureKey::Template(template.id);
     env.storage().persistent().set(&key, template);
     env.storage()
         .persistent()
@@ -885,28 +891,28 @@ pub fn set_template(env: &Env, template: &ProposalTemplate) {
 pub fn get_template(env: &Env, id: u64) -> Result<ProposalTemplate, VaultError> {
     env.storage()
         .persistent()
-        .get(&DataKey::Template(id))
+        .get(&FeatureKey::Template(id))
         .ok_or(VaultError::TemplateNotFound)
 }
 
 /// Check if a template exists
 #[allow(dead_code)]
 pub fn template_exists(env: &Env, id: u64) -> bool {
-    env.storage().persistent().has(&DataKey::Template(id))
+    env.storage().persistent().has(&FeatureKey::Template(id))
 }
 
 /// Get template ID by name
 pub fn get_template_id_by_name(env: &Env, name: &soroban_sdk::Symbol) -> Option<u64> {
     env.storage()
         .instance()
-        .get(&DataKey::TemplateName(name.clone()))
+        .get(&FeatureKey::TemplateName(name.clone()))
 }
 
 /// Set template name to ID mapping
 pub fn set_template_name_mapping(env: &Env, name: &soroban_sdk::Symbol, id: u64) {
     env.storage()
         .instance()
-        .set(&DataKey::TemplateName(name.clone()), &id);
+        .set(&FeatureKey::TemplateName(name.clone()), &id);
 }
 
 /// Remove template name mapping
@@ -914,14 +920,14 @@ pub fn set_template_name_mapping(env: &Env, name: &soroban_sdk::Symbol, id: u64)
 pub fn remove_template_name_mapping(env: &Env, name: &soroban_sdk::Symbol) {
     env.storage()
         .instance()
-        .remove(&DataKey::TemplateName(name.clone()));
+        .remove(&FeatureKey::TemplateName(name.clone()));
 }
 
 /// Check if a template name already exists
 pub fn template_name_exists(env: &Env, name: &soroban_sdk::Symbol) -> bool {
     env.storage()
         .instance()
-        .has(&DataKey::TemplateName(name.clone()))
+        .has(&FeatureKey::TemplateName(name.clone()))
 }
 
 // ============================================================================
@@ -931,11 +937,11 @@ pub fn template_name_exists(env: &Env, name: &soroban_sdk::Symbol) -> bool {
 pub fn get_retry_state(env: &Env, proposal_id: u64) -> Option<RetryState> {
     env.storage()
         .persistent()
-        .get(&DataKey::RetryState(proposal_id))
+        .get(&FeatureKey::RetryState(proposal_id))
 }
 
 pub fn set_retry_state(env: &Env, proposal_id: u64, state: &RetryState) {
-    let key = DataKey::RetryState(proposal_id);
+    let key = FeatureKey::RetryState(proposal_id);
     env.storage().persistent().set(&key, state);
     env.storage()
         .persistent()
@@ -949,7 +955,7 @@ pub fn set_retry_state(env: &Env, proposal_id: u64, state: &RetryState) {
 pub fn get_next_subscription_id(env: &Env) -> u64 {
     env.storage()
         .instance()
-        .get(&DataKey::NextSubscriptionId)
+        .get(&FeatureKey::NextSubscriptionId)
         .unwrap_or(1)
 }
 
@@ -957,19 +963,19 @@ pub fn increment_subscription_id(env: &Env) -> u64 {
     let id = get_next_subscription_id(env);
     env.storage()
         .instance()
-        .set(&DataKey::NextSubscriptionId, &(id + 1));
+        .set(&FeatureKey::NextSubscriptionId, &(id + 1));
     id
 }
 
 pub fn get_subscription(env: &Env, id: u64) -> Result<Subscription, VaultError> {
     env.storage()
         .persistent()
-        .get(&DataKey::Subscription(id))
+        .get(&FeatureKey::Subscription(id))
         .ok_or(VaultError::ProposalNotFound)
 }
 
 pub fn set_subscription(env: &Env, subscription: &Subscription) {
-    let key = DataKey::Subscription(subscription.id);
+    let key = FeatureKey::Subscription(subscription.id);
     env.storage().persistent().set(&key, subscription);
     env.storage()
         .persistent()
@@ -979,14 +985,14 @@ pub fn set_subscription(env: &Env, subscription: &Subscription) {
 pub fn get_subscription_payments(env: &Env, subscription_id: u64) -> Vec<SubscriptionPayment> {
     env.storage()
         .persistent()
-        .get(&DataKey::SubscriptionPayments(subscription_id))
+        .get(&FeatureKey::SubscriptionPayments(subscription_id))
         .unwrap_or_else(|| Vec::new(env))
 }
 
 pub fn add_subscription_payment(env: &Env, payment: &SubscriptionPayment) {
     let mut payments = get_subscription_payments(env, payment.subscription_id);
     payments.push_back(payment.clone());
-    let key = DataKey::SubscriptionPayments(payment.subscription_id);
+    let key = FeatureKey::SubscriptionPayments(payment.subscription_id);
     env.storage().persistent().set(&key, &payments);
     env.storage()
         .persistent()
@@ -996,14 +1002,14 @@ pub fn add_subscription_payment(env: &Env, payment: &SubscriptionPayment) {
 pub fn get_subscriber_subscriptions(env: &Env, subscriber: &Address) -> Vec<u64> {
     env.storage()
         .persistent()
-        .get(&DataKey::SubscriberSubscriptions(subscriber.clone()))
+        .get(&FeatureKey::SubscriberSubscriptions(subscriber.clone()))
         .unwrap_or_else(|| Vec::new(env))
 }
 
 pub fn add_subscriber_subscription(env: &Env, subscriber: &Address, subscription_id: u64) {
     let mut subs = get_subscriber_subscriptions(env, subscriber);
     subs.push_back(subscription_id);
-    let key = DataKey::SubscriberSubscriptions(subscriber.clone());
+    let key = FeatureKey::SubscriberSubscriptions(subscriber.clone());
     env.storage().persistent().set(&key, &subs);
     env.storage()
         .persistent()
@@ -1016,7 +1022,7 @@ pub fn add_subscriber_subscription(env: &Env, subscriber: &Address, subscription
 pub fn get_next_escrow_id(env: &Env) -> u64 {
     env.storage()
         .instance()
-        .get(&DataKey::NextEscrowId)
+        .get(&FeatureKey::NextEscrowId)
         .unwrap_or(1)
 }
 
@@ -1024,19 +1030,19 @@ pub fn increment_escrow_id(env: &Env) -> u64 {
     let id = get_next_escrow_id(env);
     env.storage()
         .instance()
-        .set(&DataKey::NextEscrowId, &(id + 1));
+        .set(&FeatureKey::NextEscrowId, &(id + 1));
     id
 }
 
 pub fn get_escrow(env: &Env, id: u64) -> Result<Escrow, VaultError> {
     env.storage()
         .persistent()
-        .get(&DataKey::Escrow(id))
+        .get(&FeatureKey::Escrow(id))
         .ok_or(VaultError::ProposalNotFound)
 }
 
 pub fn set_escrow(env: &Env, escrow: &Escrow) {
-    let key = DataKey::Escrow(escrow.id);
+    let key = FeatureKey::Escrow(escrow.id);
     env.storage().persistent().set(&key, escrow);
     env.storage()
         .persistent()
@@ -1046,14 +1052,14 @@ pub fn set_escrow(env: &Env, escrow: &Escrow) {
 pub fn get_funder_escrows(env: &Env, funder: &Address) -> Vec<u64> {
     env.storage()
         .persistent()
-        .get(&DataKey::FunderEscrows(funder.clone()))
+        .get(&FeatureKey::FunderEscrows(funder.clone()))
         .unwrap_or_else(|| Vec::new(env))
 }
 
 pub fn add_funder_escrow(env: &Env, funder: &Address, escrow_id: u64) {
     let mut escrows = get_funder_escrows(env, funder);
     escrows.push_back(escrow_id);
-    let key = DataKey::FunderEscrows(funder.clone());
+    let key = FeatureKey::FunderEscrows(funder.clone());
     env.storage().persistent().set(&key, &escrows);
     env.storage()
         .persistent()
@@ -1063,14 +1069,14 @@ pub fn add_funder_escrow(env: &Env, funder: &Address, escrow_id: u64) {
 pub fn get_recipient_escrows(env: &Env, recipient: &Address) -> Vec<u64> {
     env.storage()
         .persistent()
-        .get(&DataKey::RecipientEscrows(recipient.clone()))
+        .get(&FeatureKey::RecipientEscrows(recipient.clone()))
         .unwrap_or_else(|| Vec::new(env))
 }
 
 pub fn add_recipient_escrow(env: &Env, recipient: &Address, escrow_id: u64) {
     let mut escrows = get_recipient_escrows(env, recipient);
     escrows.push_back(escrow_id);
-    let key = DataKey::RecipientEscrows(recipient.clone());
+    let key = FeatureKey::RecipientEscrows(recipient.clone());
     env.storage().persistent().set(&key, &escrows);
     env.storage()
         .persistent()
@@ -1084,7 +1090,7 @@ pub fn add_recipient_escrow(env: &Env, recipient: &Address, escrow_id: u64) {
 pub fn get_next_batch_id(env: &Env) -> u64 {
     env.storage()
         .instance()
-        .get::<DataKey, u64>(&DataKey::BatchIdCounter)
+        .get::<FeatureKey, u64>(&FeatureKey::BatchIdCounter)
         .unwrap_or(0)
 }
 
@@ -1093,13 +1099,13 @@ pub fn increment_batch_id(env: &Env) -> u64 {
     let next = current + 1;
     env.storage()
         .instance()
-        .set(&DataKey::BatchIdCounter, &next);
+        .set(&FeatureKey::BatchIdCounter, &next);
     extend_instance_ttl(env);
     next
 }
 
 pub fn set_batch(env: &Env, batch: &crate::types::BatchTransaction) {
-    let key = DataKey::Batch(batch.id);
+    let key = FeatureKey::Batch(batch.id);
     env.storage().persistent().set(&key, batch);
     env.storage()
         .persistent()
@@ -1107,7 +1113,7 @@ pub fn set_batch(env: &Env, batch: &crate::types::BatchTransaction) {
 }
 
 pub fn get_batch(env: &Env, batch_id: u64) -> Result<crate::types::BatchTransaction, VaultError> {
-    let key = DataKey::Batch(batch_id);
+    let key = FeatureKey::Batch(batch_id);
     env.storage()
         .persistent()
         .get(&key)
@@ -1116,7 +1122,7 @@ pub fn get_batch(env: &Env, batch_id: u64) -> Result<crate::types::BatchTransact
 }
 
 pub fn set_batch_result(env: &Env, result: &crate::types::BatchExecutionResult) {
-    let key = DataKey::BatchResult(result.batch_id);
+    let key = FeatureKey::BatchResult(result.batch_id);
     env.storage().persistent().set(&key, result);
     env.storage()
         .persistent()
@@ -1124,13 +1130,13 @@ pub fn set_batch_result(env: &Env, result: &crate::types::BatchExecutionResult) 
 }
 
 pub fn get_batch_result(env: &Env, batch_id: u64) -> Option<crate::types::BatchExecutionResult> {
-    let key = DataKey::BatchResult(batch_id);
+    let key = FeatureKey::BatchResult(batch_id);
     env.storage().persistent().get(&key).flatten()
 }
 
 #[allow(dead_code)]
 pub fn get_rollback_state(env: &Env, batch_id: u64) -> Vec<(Address, i128)> {
-    let key = DataKey::BatchRollback(batch_id);
+    let key = FeatureKey::BatchRollback(batch_id);
     env.storage()
         .persistent()
         .get(&key)
@@ -1139,7 +1145,7 @@ pub fn get_rollback_state(env: &Env, batch_id: u64) -> Vec<(Address, i128)> {
 }
 
 pub fn set_rollback_state(env: &Env, batch_id: u64, state: &Vec<(Address, i128)>) {
-    let key = DataKey::BatchRollback(batch_id);
+    let key = FeatureKey::BatchRollback(batch_id);
     env.storage().persistent().set(&key, state);
     env.storage()
         .persistent()
@@ -1153,12 +1159,12 @@ pub fn set_rollback_state(env: &Env, batch_id: u64, state: &Vec<(Address, i128)>
 pub fn get_recovery_proposal(env: &Env, id: u64) -> Result<RecoveryProposal, VaultError> {
     env.storage()
         .persistent()
-        .get(&DataKey::RecoveryProposal(id))
+        .get(&FeatureKey::RecoveryProposal(id))
         .ok_or(VaultError::ProposalNotFound)
 }
 
 pub fn set_recovery_proposal(env: &Env, proposal: &RecoveryProposal) {
-    let key = DataKey::RecoveryProposal(proposal.id);
+    let key = FeatureKey::RecoveryProposal(proposal.id);
     env.storage().persistent().set(&key, proposal);
     env.storage()
         .persistent()
@@ -1168,7 +1174,7 @@ pub fn set_recovery_proposal(env: &Env, proposal: &RecoveryProposal) {
 pub fn get_next_recovery_id(env: &Env) -> u64 {
     env.storage()
         .instance()
-        .get(&DataKey::NextRecoveryId)
+        .get(&FeatureKey::NextRecoveryId)
         .unwrap_or(1)
 }
 
@@ -1176,7 +1182,7 @@ pub fn increment_recovery_id(env: &Env) -> u64 {
     let id = get_next_recovery_id(env);
     env.storage()
         .instance()
-        .set(&DataKey::NextRecoveryId, &(id + 1));
+        .set(&FeatureKey::NextRecoveryId, &(id + 1));
     id
 }
 
@@ -1188,7 +1194,7 @@ pub fn increment_recovery_id(env: &Env) -> u64 {
 pub fn get_fee_structure(env: &Env) -> FeeStructure {
     env.storage()
         .instance()
-        .get(&DataKey::FeeStructure)
+        .get(&FeatureKey::FeeStructure)
         .unwrap_or_else(|| FeeStructure::default(env))
 }
 
@@ -1196,21 +1202,21 @@ pub fn get_fee_structure(env: &Env) -> FeeStructure {
 pub fn set_fee_structure(env: &Env, fee_structure: &FeeStructure) {
     env.storage()
         .instance()
-        .set(&DataKey::FeeStructure, fee_structure);
+        .set(&FeatureKey::FeeStructure, fee_structure);
 }
 
 /// Get total fees collected for a specific token
 pub fn get_fees_collected(env: &Env, token: &Address) -> i128 {
     env.storage()
         .persistent()
-        .get(&DataKey::FeesCollected(token.clone()))
+        .get(&FeatureKey::FeesCollected(token.clone()))
         .unwrap_or(0)
 }
 
 /// Add to fees collected for a specific token
 pub fn add_fees_collected(env: &Env, token: &Address, amount: i128) {
     let current = get_fees_collected(env, token);
-    let key = DataKey::FeesCollected(token.clone());
+    let key = FeatureKey::FeesCollected(token.clone());
     env.storage().persistent().set(&key, &(current + amount));
     env.storage()
         .persistent()
@@ -1221,14 +1227,14 @@ pub fn add_fees_collected(env: &Env, token: &Address, amount: i128) {
 pub fn get_user_volume(env: &Env, user: &Address, token: &Address) -> i128 {
     env.storage()
         .persistent()
-        .get(&DataKey::UserVolume(user.clone(), token.clone()))
+        .get(&FeatureKey::UserVolume(user.clone(), token.clone()))
         .unwrap_or(0)
 }
 
 /// Update user's transaction volume for a specific token
 pub fn add_user_volume(env: &Env, user: &Address, token: &Address, amount: i128) {
     let current = get_user_volume(env, user, token);
-    let key = DataKey::UserVolume(user.clone(), token.clone());
+    let key = FeatureKey::UserVolume(user.clone(), token.clone());
     env.storage().persistent().set(&key, &(current + amount));
     env.storage()
         .persistent()
@@ -1243,7 +1249,7 @@ pub fn add_user_volume(env: &Env, user: &Address, token: &Address, amount: i128)
 pub fn get_staking_config(env: &Env) -> StakingConfig {
     env.storage()
         .instance()
-        .get(&DataKey::StakingConfig)
+        .get(&FeatureKey::StakingConfig)
         .unwrap_or_else(StakingConfig::default)
 }
 
@@ -1251,21 +1257,21 @@ pub fn get_staking_config(env: &Env) -> StakingConfig {
 pub fn set_staking_config(env: &Env, config: &StakingConfig) {
     env.storage()
         .instance()
-        .set(&DataKey::StakingConfig, config);
+        .set(&FeatureKey::StakingConfig, config);
 }
 
 /// Get stake pool balance for a specific token
 pub fn get_stake_pool(env: &Env, token: &Address) -> i128 {
     env.storage()
         .persistent()
-        .get(&DataKey::StakePool(token.clone()))
+        .get(&FeatureKey::StakePool(token.clone()))
         .unwrap_or(0)
 }
 
 /// Add to stake pool for a specific token
 pub fn add_to_stake_pool(env: &Env, token: &Address, amount: i128) {
     let current = get_stake_pool(env, token);
-    let key = DataKey::StakePool(token.clone());
+    let key = FeatureKey::StakePool(token.clone());
     env.storage().persistent().set(&key, &(current + amount));
     env.storage()
         .persistent()
@@ -1275,7 +1281,7 @@ pub fn add_to_stake_pool(env: &Env, token: &Address, amount: i128) {
 /// Subtract from stake pool for a specific token
 pub fn subtract_from_stake_pool(env: &Env, token: &Address, amount: i128) {
     let current = get_stake_pool(env, token);
-    let key = DataKey::StakePool(token.clone());
+    let key = FeatureKey::StakePool(token.clone());
     env.storage()
         .persistent()
         .set(&key, &(current.saturating_sub(amount).max(0)));
@@ -1288,12 +1294,12 @@ pub fn subtract_from_stake_pool(env: &Env, token: &Address, amount: i128) {
 pub fn get_stake_record(env: &Env, proposal_id: u64) -> Option<StakeRecord> {
     env.storage()
         .persistent()
-        .get(&DataKey::StakeRecord(proposal_id))
+        .get(&FeatureKey::StakeRecord(proposal_id))
 }
 
 /// Set stake record for a proposal
 pub fn set_stake_record(env: &Env, record: &StakeRecord) {
-    let key = DataKey::StakeRecord(record.proposal_id);
+    let key = FeatureKey::StakeRecord(record.proposal_id);
     env.storage().persistent().set(&key, record);
     env.storage()
         .persistent()
