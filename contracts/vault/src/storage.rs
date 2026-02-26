@@ -23,8 +23,14 @@ use soroban_sdk::{contracttype, Address, Env, String, Vec};
 use crate::errors::VaultError;
 use crate::types::{AuditEntry, Comment, Config, Proposal, Role, VelocityConfig};
 use soroban_sdk::Vec as SdkVec;
+use crate::types::{
+    Comment, Config, CrossVaultConfig, CrossVaultProposal, Dispute, Escrow, FeeStructure,
+    GasConfig, InsuranceConfig, ListMode, NotificationPreferences, Proposal, ProposalAmendment,
+    ProposalTemplate, RecoveryProposal, Reputation, RetryState, Role, StakeRecord, StakingConfig,
+    Subscription, SubscriptionPayment, VaultMetrics, VelocityConfig,
+};
 
-/// Storage key definitions
+/// Core storage key definitions (kept minimal to avoid size limits)
 #[contracttype]
 #[derive(Clone)]
 pub enum DataKey {
@@ -68,6 +74,92 @@ pub enum DataKey {
     NextAuditId,
     /// Last audit entry hash
     LastAuditHash,
+    /// Proposal IPFS attachment hashes -> Vec<String>
+    Attachments(u64),
+    /// Reputation record per address -> Reputation
+    Reputation(Address),
+}
+
+/// Feature-specific storage keys (split to avoid enum size limits)
+#[contracttype]
+#[derive(Clone)]
+pub enum FeatureKey {
+    /// Insurance configuration -> InsuranceConfig
+    InsuranceConfig,
+    /// Per-user notification preferences -> NotificationPreferences
+    NotificationPrefs(Address),
+    /// DEX configuration -> DexConfig
+    DexConfig,
+    /// Swap proposal by ID -> SwapProposal
+    SwapProposal(u64),
+    /// Swap result by proposal ID -> SwapResult
+    SwapResult(u64),
+    /// Gas execution limit configuration -> GasConfig
+    GasConfig,
+    /// Cached fee estimate for proposal execution -> ExecutionFeeEstimate
+    ExecutionFeeEstimate(u64),
+    /// Vault-wide performance metrics -> VaultMetrics
+    Metrics,
+    /// Proposal template by ID -> ProposalTemplate
+    Template(u64),
+    /// Next template ID counter -> u64
+    NextTemplateId,
+    /// Template name to ID mapping -> u64
+    TemplateName(soroban_sdk::Symbol),
+    /// Retry state for a proposal -> RetryState
+    RetryState(u64),
+    /// Subscription by ID -> Subscription
+    Subscription(u64),
+    /// Next subscription ID counter -> u64
+    NextSubscriptionId,
+    /// Subscription payments by subscription ID -> Vec<SubscriptionPayment>
+    SubscriptionPayments(u64),
+    /// Subscriber subscriptions by address -> Vec<u64>
+    SubscriberSubscriptions(Address),
+    /// Escrow agreement by ID -> Escrow
+    Escrow(u64),
+    /// Next escrow ID counter -> u64
+    NextEscrowId,
+    /// Escrow IDs by funder address -> Vec<u64>
+    FunderEscrows(Address),
+    /// Escrow IDs by recipient address -> Vec<u64>
+    RecipientEscrows(Address),
+    /// Recovery proposal by ID -> RecoveryProposal
+    RecoveryProposal(u64),
+    /// Next recovery proposal ID counter -> u64
+    NextRecoveryId,
+    /// Insurance pool accumulated slashed funds (Token Address) -> i128
+    InsurancePool(Address),
+    /// Fee structure configuration -> FeeStructure
+    FeeStructure,
+    /// Total fees collected per token -> i128
+    FeesCollected(Address),
+    /// User's total transaction volume per token -> i128
+    UserVolume(Address, Address),
+    /// Staking configuration -> StakingConfig
+    StakingConfig,
+    /// Staking pool accumulated funds (Token Address) -> i128
+    StakePool(Address),
+    /// Stake record for a proposal -> StakeRecord
+    StakeRecord(u64),
+    /// Cross-vault proposal configuration -> CrossVaultProposal
+    CrossVaultProposal(u64),
+    /// Cross-vault configuration -> CrossVaultConfig
+    CrossVaultConfig,
+    /// Dispute by ID -> Dispute
+    Dispute(u64),
+    /// Next dispute ID counter -> u64
+    NextDisputeId,
+    /// Disputes for a proposal -> Vec<u64>
+    ProposalDisputes(u64),
+    /// Batch transaction by ID -> BatchTransaction
+    Batch(u64),
+    /// Batch ID counter -> u64
+    BatchIdCounter,
+    /// Batch execution result -> BatchExecutionResult
+    BatchResult(u64),
+    /// Batch rollback state -> Vec<(Address, i128)>
+    BatchRollback(u64),
 }
 
 /// TTL constants (in ledgers, ~5 seconds each)
@@ -286,6 +378,46 @@ pub fn get_recurring_payment(
     env.storage()
         .persistent()
         .get(&DataKey::Recurring(id))
+        .ok_or(VaultError::ProposalNotFound)
+}
+
+// ============================================================================
+// Streaming Payments
+// ============================================================================
+
+pub fn get_next_stream_id(env: &Env) -> u64 {
+    env.storage()
+        .instance()
+        .get::<DataKey, u64>(&DataKey::Stream(StreamKey::Counter))
+        .unwrap_or(1)
+}
+
+pub fn increment_stream_id(env: &Env) -> u64 {
+    let id = get_next_stream_id(env);
+    env.storage()
+        .instance()
+        .set(&DataKey::Stream(StreamKey::Counter), &(id + 1));
+    extend_instance_ttl(env);
+    id
+}
+
+pub fn set_streaming_payment(env: &Env, stream: &crate::types::StreamingPayment) {
+    let key = DataKey::Stream(StreamKey::Payment(stream.id));
+    env.storage().persistent().set(&key, stream);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL);
+}
+
+pub fn get_streaming_payment(
+    env: &Env,
+    id: u64,
+) -> Result<crate::types::StreamingPayment, VaultError> {
+    let key = DataKey::Stream(StreamKey::Payment(id));
+    env.storage()
+        .persistent()
+        .get(&key)
+        .flatten()
         .ok_or(VaultError::ProposalNotFound)
 }
 
@@ -543,6 +675,239 @@ pub fn get_last_audit_hash(env: &Env) -> u64 {
 
 pub fn set_last_audit_hash(env: &Env, hash: u64) {
     env.storage().instance().set(&DataKey::LastAuditHash, &hash);
+// Attachments
+// ============================================================================
+
+pub fn get_attachments(env: &Env, proposal_id: u64) -> Vec<String> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::Attachments(proposal_id))
+        .unwrap_or_else(|| Vec::new(env))
+}
+
+pub fn set_attachments(env: &Env, proposal_id: u64, attachments: &Vec<String>) {
+    let key = DataKey::Attachments(proposal_id);
+    env.storage().persistent().set(&key, attachments);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, INSTANCE_TTL_THRESHOLD, INSTANCE_TTL);
+}
+
+// ============================================================================
+// Reputation (Issue: feature/reputation-system)
+// ============================================================================
+
+pub fn get_reputation(env: &Env, addr: &Address) -> Reputation {
+    env.storage()
+        .persistent()
+        .get(&DataKey::Reputation(addr.clone()))
+        .unwrap_or_default()
+}
+
+pub fn set_reputation(env: &Env, addr: &Address, rep: &Reputation) {
+    let key = DataKey::Reputation(addr.clone());
+    env.storage().persistent().set(&key, rep);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, INSTANCE_TTL_THRESHOLD, INSTANCE_TTL);
+}
+
+/// Apply time-based decay to a reputation score.
+/// Every 30 days without activity, score drifts toward the neutral 500 by 5%.
+pub fn apply_reputation_decay(env: &Env, rep: &mut Reputation) {
+    let current_ledger = env.ledger().sequence() as u64;
+    // ~30 days in ledgers
+    const DECAY_INTERVAL: u64 = 17_280 * 30;
+    if rep.last_decay_ledger == 0 {
+        rep.last_decay_ledger = current_ledger;
+        return;
+    }
+    let elapsed = current_ledger.saturating_sub(rep.last_decay_ledger);
+    let periods = elapsed / DECAY_INTERVAL;
+    if periods == 0 {
+        return;
+    }
+    // Move score toward neutral (500) by 5% per period
+    for _ in 0..periods {
+        match rep.score.cmp(&500) {
+            core::cmp::Ordering::Greater => {
+                let diff = rep.score - 500;
+                rep.score = rep.score.saturating_sub(diff / 20 + 1);
+            }
+            core::cmp::Ordering::Less => {
+                let diff = 500 - rep.score;
+                rep.score = rep.score.saturating_add(diff / 20 + 1);
+            }
+            core::cmp::Ordering::Equal => {}
+        }
+    }
+    rep.last_decay_ledger = current_ledger;
+}
+
+// ============================================================================
+// Insurance Config (Issue: feature/proposal-insurance)
+// ============================================================================
+
+pub fn get_insurance_config(env: &Env) -> InsuranceConfig {
+    env.storage()
+        .instance()
+        .get(&FeatureKey::InsuranceConfig)
+        .unwrap_or(InsuranceConfig {
+            enabled: false,
+            min_amount: 0,
+            min_insurance_bps: 100, // 1% default
+            slash_percentage: 50,   // 50% slashed on rejection by default
+        })
+}
+
+pub fn set_insurance_config(env: &Env, config: &InsuranceConfig) {
+    env.storage()
+        .instance()
+        .set(&FeatureKey::InsuranceConfig, config);
+}
+
+pub fn get_insurance_pool(env: &Env, token_addr: &Address) -> i128 {
+    env.storage()
+        .persistent()
+        .get(&FeatureKey::InsurancePool(token_addr.clone()))
+        .unwrap_or(0)
+}
+
+pub fn add_to_insurance_pool(env: &Env, token_addr: &Address, amount: i128) {
+    let current = get_insurance_pool(env, token_addr);
+    let key = FeatureKey::InsurancePool(token_addr.clone());
+    env.storage().persistent().set(&key, &(current + amount));
+    // extend TTL
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, INSTANCE_TTL_THRESHOLD, PERSISTENT_TTL); // Keeps pool persistent
+}
+
+#[allow(dead_code)]
+pub fn subtract_from_insurance_pool(env: &Env, token_addr: &Address, amount: i128) {
+    let current = get_insurance_pool(env, token_addr);
+    let key = FeatureKey::InsurancePool(token_addr.clone());
+    env.storage()
+        .persistent()
+        .set(&key, &(current.saturating_sub(amount).max(0)));
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, INSTANCE_TTL_THRESHOLD, PERSISTENT_TTL);
+}
+
+// ============================================================================
+// Notification Preferences (Issue: feature/execution-notifications)
+// ============================================================================
+
+pub fn get_notification_prefs(env: &Env, addr: &Address) -> NotificationPreferences {
+    env.storage()
+        .persistent()
+        .get(&FeatureKey::NotificationPrefs(addr.clone()))
+        .unwrap_or_else(NotificationPreferences::default)
+}
+
+pub fn set_notification_prefs(env: &Env, addr: &Address, prefs: &NotificationPreferences) {
+    let key = FeatureKey::NotificationPrefs(addr.clone());
+    env.storage().persistent().set(&key, prefs);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, INSTANCE_TTL_THRESHOLD, INSTANCE_TTL);
+}
+
+// ============================================================================
+// DEX/AMM Integration (Issue: feature/amm-integration)
+// ============================================================================
+
+use crate::types::{SwapProposal, SwapResult};
+
+pub fn set_dex_config(env: &Env, config: &DexConfig) {
+    env.storage().instance().set(&FeatureKey::DexConfig, config);
+}
+
+pub fn get_dex_config(env: &Env) -> Option<DexConfig> {
+    env.storage().instance().get(&FeatureKey::DexConfig)
+}
+
+// ============================================================================
+// Oracle Config
+// ============================================================================
+
+pub fn set_oracle_config(env: &Env, config: &crate::OptionalVaultOracleConfig) {
+    env.storage()
+        .instance()
+        .set(&DataKey::VaultOracleConfig, config);
+}
+
+pub fn set_swap_proposal(env: &Env, proposal_id: u64, swap: &SwapProposal) {
+    let key = FeatureKey::SwapProposal(proposal_id);
+    env.storage().persistent().set(&key, swap);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, INSTANCE_TTL_THRESHOLD, PROPOSAL_TTL);
+}
+
+pub fn get_swap_proposal(env: &Env, proposal_id: u64) -> Option<SwapProposal> {
+    env.storage()
+        .persistent()
+        .get(&FeatureKey::SwapProposal(proposal_id))
+}
+
+pub fn set_swap_result(env: &Env, proposal_id: u64, result: &SwapResult) {
+    let key = FeatureKey::SwapResult(proposal_id);
+    env.storage().persistent().set(&key, result);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, INSTANCE_TTL_THRESHOLD, PROPOSAL_TTL);
+}
+
+pub fn get_swap_result(env: &Env, proposal_id: u64) -> Option<SwapResult> {
+    env.storage()
+        .persistent()
+        .get(&FeatureKey::SwapResult(proposal_id))
+}
+
+// ============================================================================
+// Gas Config (Issue: feature/gas-limits)
+// ============================================================================
+
+pub fn get_gas_config(env: &Env) -> GasConfig {
+    env.storage()
+        .instance()
+        .get(&FeatureKey::GasConfig)
+        .unwrap_or_else(GasConfig::default)
+}
+
+pub fn set_gas_config(env: &Env, config: &GasConfig) {
+    env.storage().instance().set(&FeatureKey::GasConfig, config);
+}
+
+pub fn get_execution_fee_estimate(env: &Env, proposal_id: u64) -> Option<ExecutionFeeEstimate> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::ExecutionFeeEstimate(proposal_id))
+}
+
+pub fn set_execution_fee_estimate(env: &Env, proposal_id: u64, estimate: &ExecutionFeeEstimate) {
+    let key = DataKey::ExecutionFeeEstimate(proposal_id);
+    env.storage().persistent().set(&key, estimate);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, PROPOSAL_TTL / 2, PROPOSAL_TTL);
+}
+
+// ============================================================================
+// Performance Metrics (Issue: feature/performance-metrics)
+// ============================================================================
+
+pub fn get_metrics(env: &Env) -> VaultMetrics {
+    env.storage()
+        .instance()
+        .get(&FeatureKey::Metrics)
+        .unwrap_or_else(VaultMetrics::default)
+}
+
+pub fn set_metrics(env: &Env, metrics: &VaultMetrics) {
+    env.storage().instance().set(&FeatureKey::Metrics, metrics);
 }
 
 pub fn set_audit_entry(env: &Env, entry: &AuditEntry) {
@@ -592,7 +957,7 @@ pub fn create_audit_entry(env: &Env, action: crate::types::AuditAction, actor: &
 pub fn get_next_template_id(env: &Env) -> u64 {
     env.storage()
         .instance()
-        .get(&DataKey::NextTemplateId)
+        .get(&FeatureKey::NextTemplateId)
         .unwrap_or(1)
 }
 
@@ -601,13 +966,13 @@ pub fn increment_template_id(env: &Env) -> u64 {
     let id = get_next_template_id(env);
     env.storage()
         .instance()
-        .set(&DataKey::NextTemplateId, &(id + 1));
+        .set(&FeatureKey::NextTemplateId, &(id + 1));
     id
 }
 
 /// Store a proposal template
 pub fn set_template(env: &Env, template: &ProposalTemplate) {
-    let key = DataKey::Template(template.id);
+    let key = FeatureKey::Template(template.id);
     env.storage().persistent().set(&key, template);
     env.storage()
         .persistent()
@@ -618,28 +983,28 @@ pub fn set_template(env: &Env, template: &ProposalTemplate) {
 pub fn get_template(env: &Env, id: u64) -> Result<ProposalTemplate, VaultError> {
     env.storage()
         .persistent()
-        .get(&DataKey::Template(id))
+        .get(&FeatureKey::Template(id))
         .ok_or(VaultError::TemplateNotFound)
 }
 
 /// Check if a template exists
 #[allow(dead_code)]
 pub fn template_exists(env: &Env, id: u64) -> bool {
-    env.storage().persistent().has(&DataKey::Template(id))
+    env.storage().persistent().has(&FeatureKey::Template(id))
 }
 
 /// Get template ID by name
 pub fn get_template_id_by_name(env: &Env, name: &soroban_sdk::Symbol) -> Option<u64> {
     env.storage()
         .instance()
-        .get(&DataKey::TemplateName(name.clone()))
+        .get(&FeatureKey::TemplateName(name.clone()))
 }
 
 /// Set template name to ID mapping
 pub fn set_template_name_mapping(env: &Env, name: &soroban_sdk::Symbol, id: u64) {
     env.storage()
         .instance()
-        .set(&DataKey::TemplateName(name.clone()), &id);
+        .set(&FeatureKey::TemplateName(name.clone()), &id);
 }
 
 /// Remove template name mapping
@@ -647,14 +1012,14 @@ pub fn set_template_name_mapping(env: &Env, name: &soroban_sdk::Symbol, id: u64)
 pub fn remove_template_name_mapping(env: &Env, name: &soroban_sdk::Symbol) {
     env.storage()
         .instance()
-        .remove(&DataKey::TemplateName(name.clone()));
+        .remove(&FeatureKey::TemplateName(name.clone()));
 }
 
 /// Check if a template name already exists
 pub fn template_name_exists(env: &Env, name: &soroban_sdk::Symbol) -> bool {
     env.storage()
         .instance()
-        .has(&DataKey::TemplateName(name.clone()))
+        .has(&FeatureKey::TemplateName(name.clone()))
 }
 
 // ============================================================================
@@ -664,11 +1029,11 @@ pub fn template_name_exists(env: &Env, name: &soroban_sdk::Symbol) -> bool {
 pub fn get_retry_state(env: &Env, proposal_id: u64) -> Option<RetryState> {
     env.storage()
         .persistent()
-        .get(&DataKey::RetryState(proposal_id))
+        .get(&FeatureKey::RetryState(proposal_id))
 }
 
 pub fn set_retry_state(env: &Env, proposal_id: u64, state: &RetryState) {
-    let key = DataKey::RetryState(proposal_id);
+    let key = FeatureKey::RetryState(proposal_id);
     env.storage().persistent().set(&key, state);
     env.storage()
         .persistent()
@@ -676,89 +1041,71 @@ pub fn set_retry_state(env: &Env, proposal_id: u64, state: &RetryState) {
 }
 
 // ============================================================================
-// Cross-Vault Coordination (Issue: feature/cross-vault-coordination)
+// Subscription System (Issue: feature/subscription-system)
 // ============================================================================
 
-pub fn get_cross_vault_config(env: &Env) -> Option<CrossVaultConfig> {
-    env.storage().instance().get(&DataKey::CrossVaultConfig)
-}
-
-pub fn set_cross_vault_config(env: &Env, config: &CrossVaultConfig) {
+pub fn get_next_subscription_id(env: &Env) -> u64 {
     env.storage()
         .instance()
-        .set(&DataKey::CrossVaultConfig, config);
-}
-
-pub fn get_cross_vault_proposal(env: &Env, proposal_id: u64) -> Option<CrossVaultProposal> {
-    env.storage()
-        .persistent()
-        .get(&DataKey::CrossVaultProposal(proposal_id))
-}
-
-pub fn set_cross_vault_proposal(env: &Env, proposal_id: u64, proposal: &CrossVaultProposal) {
-    let key = DataKey::CrossVaultProposal(proposal_id);
-    env.storage().persistent().set(&key, proposal);
-    env.storage()
-        .persistent()
-        .extend_ttl(&key, PROPOSAL_TTL / 2, PROPOSAL_TTL);
-}
-
-// ============================================================================
-// Dispute Resolution (Issue: feature/dispute-resolution)
-// ============================================================================
-
-pub fn get_arbitrators(env: &Env) -> Vec<Address> {
-    env.storage()
-        .instance()
-        .get(&DataKey::Arbitrators)
-        .unwrap_or_else(|| Vec::new(env))
-}
-
-pub fn set_arbitrators(env: &Env, arbitrators: &Vec<Address>) {
-    env.storage()
-        .instance()
-        .set(&DataKey::Arbitrators, arbitrators);
-}
-
-pub fn get_next_dispute_id(env: &Env) -> u64 {
-    env.storage()
-        .instance()
-        .get(&DataKey::NextDisputeId)
+        .get(&FeatureKey::NextSubscriptionId)
         .unwrap_or(1)
 }
 
-pub fn increment_dispute_id(env: &Env) -> u64 {
-    let id = get_next_dispute_id(env);
+pub fn increment_subscription_id(env: &Env) -> u64 {
+    let id = get_next_subscription_id(env);
     env.storage()
         .instance()
-        .set(&DataKey::NextDisputeId, &(id + 1));
+        .set(&FeatureKey::NextSubscriptionId, &(id + 1));
     id
 }
 
-pub fn get_dispute(env: &Env, id: u64) -> Option<Dispute> {
-    env.storage().persistent().get(&DataKey::Dispute(id))
-}
-
-pub fn set_dispute(env: &Env, dispute: &Dispute) {
-    let key = DataKey::Dispute(dispute.id);
-    env.storage().persistent().set(&key, dispute);
+pub fn get_subscription(env: &Env, id: u64) -> Result<Subscription, VaultError> {
     env.storage()
         .persistent()
-        .extend_ttl(&key, PROPOSAL_TTL / 2, PROPOSAL_TTL);
+        .get(&FeatureKey::Subscription(id))
+        .ok_or(VaultError::ProposalNotFound)
 }
 
-pub fn get_proposal_dispute(env: &Env, proposal_id: u64) -> Option<u64> {
+pub fn set_subscription(env: &Env, subscription: &Subscription) {
+    let key = FeatureKey::Subscription(subscription.id);
+    env.storage().persistent().set(&key, subscription);
     env.storage()
         .persistent()
-        .get(&DataKey::ProposalDispute(proposal_id))
+        .extend_ttl(&key, INSTANCE_TTL_THRESHOLD, INSTANCE_TTL);
 }
 
-pub fn set_proposal_dispute(env: &Env, proposal_id: u64, dispute_id: u64) {
-    let key = DataKey::ProposalDispute(proposal_id);
-    env.storage().persistent().set(&key, &dispute_id);
+pub fn get_subscription_payments(env: &Env, subscription_id: u64) -> Vec<SubscriptionPayment> {
     env.storage()
         .persistent()
-        .extend_ttl(&key, PROPOSAL_TTL / 2, PROPOSAL_TTL);
+        .get(&FeatureKey::SubscriptionPayments(subscription_id))
+        .unwrap_or_else(|| Vec::new(env))
+}
+
+pub fn add_subscription_payment(env: &Env, payment: &SubscriptionPayment) {
+    let mut payments = get_subscription_payments(env, payment.subscription_id);
+    payments.push_back(payment.clone());
+    let key = FeatureKey::SubscriptionPayments(payment.subscription_id);
+    env.storage().persistent().set(&key, &payments);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, INSTANCE_TTL_THRESHOLD, INSTANCE_TTL);
+}
+
+pub fn get_subscriber_subscriptions(env: &Env, subscriber: &Address) -> Vec<u64> {
+    env.storage()
+        .persistent()
+        .get(&FeatureKey::SubscriberSubscriptions(subscriber.clone()))
+        .unwrap_or_else(|| Vec::new(env))
+}
+
+pub fn add_subscriber_subscription(env: &Env, subscriber: &Address, subscription_id: u64) {
+    let mut subs = get_subscriber_subscriptions(env, subscriber);
+    subs.push_back(subscription_id);
+    let key = FeatureKey::SubscriberSubscriptions(subscriber.clone());
+    env.storage().persistent().set(&key, &subs);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, INSTANCE_TTL_THRESHOLD, INSTANCE_TTL);
 }
 // ============================================================================
 // Escrow (Issue: feature/escrow-system)
@@ -767,7 +1114,7 @@ pub fn set_proposal_dispute(env: &Env, proposal_id: u64, dispute_id: u64) {
 pub fn get_next_escrow_id(env: &Env) -> u64 {
     env.storage()
         .instance()
-        .get(&DataKey::NextEscrowId)
+        .get(&FeatureKey::NextEscrowId)
         .unwrap_or(1)
 }
 
@@ -775,19 +1122,19 @@ pub fn increment_escrow_id(env: &Env) -> u64 {
     let id = get_next_escrow_id(env);
     env.storage()
         .instance()
-        .set(&DataKey::NextEscrowId, &(id + 1));
+        .set(&FeatureKey::NextEscrowId, &(id + 1));
     id
 }
 
 pub fn get_escrow(env: &Env, id: u64) -> Result<Escrow, VaultError> {
     env.storage()
         .persistent()
-        .get(&DataKey::Escrow(id))
+        .get(&FeatureKey::Escrow(id))
         .ok_or(VaultError::ProposalNotFound)
 }
 
 pub fn set_escrow(env: &Env, escrow: &Escrow) {
-    let key = DataKey::Escrow(escrow.id);
+    let key = FeatureKey::Escrow(escrow.id);
     env.storage().persistent().set(&key, escrow);
     env.storage()
         .persistent()
@@ -797,14 +1144,14 @@ pub fn set_escrow(env: &Env, escrow: &Escrow) {
 pub fn get_funder_escrows(env: &Env, funder: &Address) -> Vec<u64> {
     env.storage()
         .persistent()
-        .get(&DataKey::FunderEscrows(funder.clone()))
+        .get(&FeatureKey::FunderEscrows(funder.clone()))
         .unwrap_or_else(|| Vec::new(env))
 }
 
 pub fn add_funder_escrow(env: &Env, funder: &Address, escrow_id: u64) {
     let mut escrows = get_funder_escrows(env, funder);
     escrows.push_back(escrow_id);
-    let key = DataKey::FunderEscrows(funder.clone());
+    let key = FeatureKey::FunderEscrows(funder.clone());
     env.storage().persistent().set(&key, &escrows);
     env.storage()
         .persistent()
@@ -814,16 +1161,239 @@ pub fn add_funder_escrow(env: &Env, funder: &Address, escrow_id: u64) {
 pub fn get_recipient_escrows(env: &Env, recipient: &Address) -> Vec<u64> {
     env.storage()
         .persistent()
-        .get(&DataKey::RecipientEscrows(recipient.clone()))
+        .get(&FeatureKey::RecipientEscrows(recipient.clone()))
         .unwrap_or_else(|| Vec::new(env))
 }
 
 pub fn add_recipient_escrow(env: &Env, recipient: &Address, escrow_id: u64) {
     let mut escrows = get_recipient_escrows(env, recipient);
     escrows.push_back(escrow_id);
-    let key = DataKey::RecipientEscrows(recipient.clone());
+    let key = FeatureKey::RecipientEscrows(recipient.clone());
     env.storage().persistent().set(&key, &escrows);
     env.storage()
         .persistent()
         .extend_ttl(&key, INSTANCE_TTL_THRESHOLD, INSTANCE_TTL);
+}
+
+// ============================================================================
+// Batch Transactions
+// ============================================================================
+
+pub fn get_next_batch_id(env: &Env) -> u64 {
+    env.storage()
+        .instance()
+        .get::<FeatureKey, u64>(&FeatureKey::BatchIdCounter)
+        .unwrap_or(0)
+}
+
+pub fn increment_batch_id(env: &Env) -> u64 {
+    let current = get_next_batch_id(env);
+    let next = current + 1;
+    env.storage()
+        .instance()
+        .set(&FeatureKey::BatchIdCounter, &next);
+    extend_instance_ttl(env);
+    next
+}
+
+pub fn set_batch(env: &Env, batch: &crate::types::BatchTransaction) {
+    let key = FeatureKey::Batch(batch.id);
+    env.storage().persistent().set(&key, batch);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL);
+}
+
+pub fn get_batch(env: &Env, batch_id: u64) -> Result<crate::types::BatchTransaction, VaultError> {
+    let key = FeatureKey::Batch(batch_id);
+    env.storage()
+        .persistent()
+        .get(&key)
+        .flatten()
+        .ok_or(VaultError::BatchNotFound)
+}
+
+pub fn set_batch_result(env: &Env, result: &crate::types::BatchExecutionResult) {
+    let key = FeatureKey::BatchResult(result.batch_id);
+    env.storage().persistent().set(&key, result);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL);
+}
+
+pub fn get_batch_result(env: &Env, batch_id: u64) -> Option<crate::types::BatchExecutionResult> {
+    let key = FeatureKey::BatchResult(batch_id);
+    env.storage().persistent().get(&key).flatten()
+}
+
+#[allow(dead_code)]
+pub fn get_rollback_state(env: &Env, batch_id: u64) -> Vec<(Address, i128)> {
+    let key = FeatureKey::BatchRollback(batch_id);
+    env.storage()
+        .persistent()
+        .get(&key)
+        .flatten()
+        .unwrap_or_else(|| Vec::new(env))
+}
+
+pub fn set_rollback_state(env: &Env, batch_id: u64, state: &Vec<(Address, i128)>) {
+    let key = FeatureKey::BatchRollback(batch_id);
+    env.storage().persistent().set(&key, state);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL);
+}
+
+// ============================================================================
+// Wallet Recovery (Issue: feature/wallet-recovery)
+// ============================================================================
+
+pub fn get_recovery_proposal(env: &Env, id: u64) -> Result<RecoveryProposal, VaultError> {
+    env.storage()
+        .persistent()
+        .get(&FeatureKey::RecoveryProposal(id))
+        .ok_or(VaultError::ProposalNotFound)
+}
+
+pub fn set_recovery_proposal(env: &Env, proposal: &RecoveryProposal) {
+    let key = FeatureKey::RecoveryProposal(proposal.id);
+    env.storage().persistent().set(&key, proposal);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL);
+}
+
+pub fn get_next_recovery_id(env: &Env) -> u64 {
+    env.storage()
+        .instance()
+        .get(&FeatureKey::NextRecoveryId)
+        .unwrap_or(1)
+}
+
+pub fn increment_recovery_id(env: &Env) -> u64 {
+    let id = get_next_recovery_id(env);
+    env.storage()
+        .instance()
+        .set(&FeatureKey::NextRecoveryId, &(id + 1));
+    id
+}
+
+// ============================================================================
+// Dynamic Fee Structure (Issue: feature/dynamic-fees)
+// ============================================================================
+
+/// Get the fee structure configuration
+pub fn get_fee_structure(env: &Env) -> FeeStructure {
+    env.storage()
+        .instance()
+        .get(&FeatureKey::FeeStructure)
+        .unwrap_or_else(|| FeeStructure::default(env))
+}
+
+/// Set the fee structure configuration
+pub fn set_fee_structure(env: &Env, fee_structure: &FeeStructure) {
+    env.storage()
+        .instance()
+        .set(&FeatureKey::FeeStructure, fee_structure);
+}
+
+/// Get total fees collected for a specific token
+pub fn get_fees_collected(env: &Env, token: &Address) -> i128 {
+    env.storage()
+        .persistent()
+        .get(&FeatureKey::FeesCollected(token.clone()))
+        .unwrap_or(0)
+}
+
+/// Add to fees collected for a specific token
+pub fn add_fees_collected(env: &Env, token: &Address, amount: i128) {
+    let current = get_fees_collected(env, token);
+    let key = FeatureKey::FeesCollected(token.clone());
+    env.storage().persistent().set(&key, &(current + amount));
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, INSTANCE_TTL_THRESHOLD, PERSISTENT_TTL);
+}
+
+/// Get user's total transaction volume for a specific token
+pub fn get_user_volume(env: &Env, user: &Address, token: &Address) -> i128 {
+    env.storage()
+        .persistent()
+        .get(&FeatureKey::UserVolume(user.clone(), token.clone()))
+        .unwrap_or(0)
+}
+
+/// Update user's transaction volume for a specific token
+pub fn add_user_volume(env: &Env, user: &Address, token: &Address, amount: i128) {
+    let current = get_user_volume(env, user, token);
+    let key = FeatureKey::UserVolume(user.clone(), token.clone());
+    env.storage().persistent().set(&key, &(current + amount));
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, INSTANCE_TTL_THRESHOLD, PERSISTENT_TTL);
+}
+
+// ============================================================================
+// Proposal Staking (Issue: feature/proposal-staking)
+// ============================================================================
+
+/// Get the staking configuration
+pub fn get_staking_config(env: &Env) -> StakingConfig {
+    env.storage()
+        .instance()
+        .get(&FeatureKey::StakingConfig)
+        .unwrap_or_else(StakingConfig::default)
+}
+
+/// Set the staking configuration
+pub fn set_staking_config(env: &Env, config: &StakingConfig) {
+    env.storage()
+        .instance()
+        .set(&FeatureKey::StakingConfig, config);
+}
+
+/// Get stake pool balance for a specific token
+pub fn get_stake_pool(env: &Env, token: &Address) -> i128 {
+    env.storage()
+        .persistent()
+        .get(&FeatureKey::StakePool(token.clone()))
+        .unwrap_or(0)
+}
+
+/// Add to stake pool for a specific token
+pub fn add_to_stake_pool(env: &Env, token: &Address, amount: i128) {
+    let current = get_stake_pool(env, token);
+    let key = FeatureKey::StakePool(token.clone());
+    env.storage().persistent().set(&key, &(current + amount));
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, INSTANCE_TTL_THRESHOLD, PERSISTENT_TTL);
+}
+
+/// Subtract from stake pool for a specific token
+pub fn subtract_from_stake_pool(env: &Env, token: &Address, amount: i128) {
+    let current = get_stake_pool(env, token);
+    let key = FeatureKey::StakePool(token.clone());
+    env.storage()
+        .persistent()
+        .set(&key, &(current.saturating_sub(amount).max(0)));
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, INSTANCE_TTL_THRESHOLD, PERSISTENT_TTL);
+}
+
+/// Get stake record for a proposal
+pub fn get_stake_record(env: &Env, proposal_id: u64) -> Option<StakeRecord> {
+    env.storage()
+        .persistent()
+        .get(&FeatureKey::StakeRecord(proposal_id))
+}
+
+/// Set stake record for a proposal
+pub fn set_stake_record(env: &Env, record: &StakeRecord) {
+    let key = FeatureKey::StakeRecord(record.proposal_id);
+    env.storage().persistent().set(&key, record);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL);
 }

@@ -150,6 +150,18 @@ pub fn emit_config_updated(env: &Env, updater: &Address) {
         .publish((Symbol::new(env, "config_updated"),), updater.clone());
 }
 
+// ============================================================================
+// Oracle Events (feature/oracle-integration)
+// ============================================================================
+
+/// Emit when oracle configuration is updated by admin
+pub fn emit_oracle_config_updated(env: &Env, admin: &Address, oracle: &Address) {
+    env.events().publish(
+        (Symbol::new(env, "oracle_cfg_updated"),),
+        (admin.clone(), oracle.clone()),
+    );
+}
+
 /// Emit when quorum configuration is updated by admin
 pub fn emit_quorum_updated(env: &Env, admin: &Address, old_quorum: u32, new_quorum: u32) {
     env.events().publish(
@@ -223,6 +235,46 @@ pub fn emit_insurance_returned(env: &Env, proposal_id: u64, proposer: &Address, 
 }
 
 // ============================================================================
+// Staking Events (feature/proposal-staking)
+// ============================================================================
+
+/// Emit when stake is locked on proposal creation
+pub fn emit_stake_locked(
+    env: &Env,
+    proposal_id: u64,
+    proposer: &Address,
+    amount: i128,
+    token: &Address,
+) {
+    env.events().publish(
+        (Symbol::new(env, "stake_locked"), proposal_id),
+        (proposer.clone(), amount, token.clone()),
+    );
+}
+
+/// Emit when stake is slashed for malicious proposal
+pub fn emit_stake_slashed(
+    env: &Env,
+    proposal_id: u64,
+    proposer: &Address,
+    slashed_amount: i128,
+    returned_amount: i128,
+) {
+    env.events().publish(
+        (Symbol::new(env, "stake_slashed"), proposal_id),
+        (proposer.clone(), slashed_amount, returned_amount),
+    );
+}
+
+/// Emit when stake is refunded on successful execution
+pub fn emit_stake_refunded(env: &Env, proposal_id: u64, proposer: &Address, amount: i128) {
+    env.events().publish(
+        (Symbol::new(env, "stake_refunded"), proposal_id),
+        (proposer.clone(), amount),
+    );
+}
+
+// ============================================================================
 // Reputation Events (feature/reputation-system)
 // ============================================================================
 
@@ -284,38 +336,16 @@ pub fn emit_comment_edited(env: &Env, comment_id: u64, author: &Address) {
     );
 }
 
-// ============================================================================
-// DEX/AMM Events (feature/amm-integration)
-// ============================================================================
-
-/// Emit when DEX configuration is updated
-pub fn emit_dex_config_updated(env: &Env, admin: &Address) {
-    env.events()
-        .publish((Symbol::new(env, "dex_config_updated"),), admin.clone());
-}
-
-/// Emit when a swap is executed
-pub fn emit_swap_executed(
-    env: &Env,
-    proposal_id: u64,
-    dex: &Address,
-    amount_in: i128,
-    amount_out: i128,
-) {
+/// Emit when a hook is registered
+pub fn emit_hook_registered(env: &Env, hook: &Address, is_pre: bool) {
     env.events().publish(
-        (Symbol::new(env, "swap_executed"), proposal_id),
-        (dex.clone(), amount_in, amount_out),
+        (Symbol::new(env, "hook_registered"),),
+        (hook.clone(), is_pre),
     );
 }
 
-/// Emit when liquidity is added
-pub fn emit_liquidity_added(env: &Env, proposal_id: u64, dex: &Address, lp_tokens: i128) {
-    env.events().publish(
-        (Symbol::new(env, "liquidity_added"), proposal_id),
-        (dex.clone(), lp_tokens),
-    );
-}
-
+/// Emit when a hook is removed
+pub fn emit_hook_removed(env: &Env, hook: &Address, is_pre: bool) {
 /// Emit when liquidity is removed
 pub fn emit_liquidity_removed(env: &Env, proposal_id: u64, dex: &Address, lp_tokens: i128) {
     env.events().publish(
@@ -358,6 +388,26 @@ pub fn emit_gas_config_updated(env: &Env, admin: &Address) {
         .publish((Symbol::new(env, "gas_cfg_updated"),), admin.clone());
 }
 
+/// Emit when execution fee estimate is calculated/refreshed for a proposal.
+pub fn emit_execution_fee_estimated(
+    env: &Env,
+    proposal_id: u64,
+    base_fee: u64,
+    resource_fee: u64,
+    total_fee: u64,
+) {
+    env.events().publish(
+        (Symbol::new(env, "exec_fee_estimated"), proposal_id),
+        (base_fee, resource_fee, total_fee),
+    );
+}
+
+/// Emit when a proposal execution consumes its estimated fee.
+pub fn emit_execution_fee_used(env: &Env, proposal_id: u64, total_fee: u64) {
+    env.events()
+        .publish((Symbol::new(env, "exec_fee_used"), proposal_id), total_fee);
+}
+
 // ============================================================================
 // Performance Metrics Events (feature/performance-metrics)
 // ============================================================================
@@ -389,16 +439,16 @@ pub fn emit_voting_deadline_extended(
     admin: &Address,
 ) {
     env.events().publish(
-        (Symbol::new(env, "deadline_extended"), proposal_id),
-        (old_deadline, new_deadline, admin.clone()),
+        (Symbol::new(env, "hook_removed"),),
+        (hook.clone(), is_pre),
     );
 }
 
-/// Emit when a proposal is auto-rejected due to voting deadline
-pub fn emit_proposal_deadline_rejected(env: &Env, proposal_id: u64, deadline: u64) {
+/// Emit when a hook is executed
+pub fn emit_hook_executed(env: &Env, hook: &Address, proposal_id: u64, is_pre: bool) {
     env.events().publish(
-        (Symbol::new(env, "deadline_rejected"), proposal_id),
-        deadline,
+        (Symbol::new(env, "hook_executed"), proposal_id),
+        (hook.clone(), is_pre),
     );
 }
 
@@ -499,119 +549,63 @@ pub fn emit_retries_exhausted(env: &Env, proposal_id: u64, total_attempts: u32) 
 }
 
 // ============================================================================
-// Cross-Vault Events (feature/cross-vault-coordination)
+// Subscription Events (feature/subscription-system)
 // ============================================================================
 
-/// Emit when a cross-vault proposal is created
-pub fn emit_cross_vault_proposed(
+/// Emit when a new subscription is created
+pub fn emit_subscription_created(
     env: &Env,
-    proposal_id: u64,
-    proposer: &Address,
-    num_actions: u32,
-) {
-    env.events().publish(
-        (Symbol::new(env, "xvault_proposed"), proposal_id),
-        (proposer.clone(), num_actions),
-    );
-}
-
-/// Emit when cross-vault execution starts
-pub fn emit_cross_vault_execution_started(
-    env: &Env,
-    proposal_id: u64,
-    executor: &Address,
-    num_actions: u32,
-) {
-    env.events().publish(
-        (Symbol::new(env, "xvault_exec_start"), proposal_id),
-        (executor.clone(), num_actions),
-    );
-}
-
-/// Emit when a single cross-vault action is executed
-pub fn emit_cross_vault_action_executed(
-    env: &Env,
-    proposal_id: u64,
-    action_index: u32,
-    vault_address: &Address,
+    subscription_id: u64,
+    subscriber: &Address,
+    tier: u32,
     amount: i128,
 ) {
     env.events().publish(
-        (Symbol::new(env, "xvault_action"), proposal_id),
-        (action_index, vault_address.clone(), amount),
+        (Symbol::new(env, "subscription_created"), subscription_id),
+        (subscriber.clone(), tier, amount),
     );
 }
 
-/// Emit when all cross-vault actions complete successfully
-pub fn emit_cross_vault_executed(
+/// Emit when a subscription is renewed
+pub fn emit_subscription_renewed(
     env: &Env,
-    proposal_id: u64,
-    executor: &Address,
-    num_actions: u32,
-) {
-    env.events().publish(
-        (Symbol::new(env, "xvault_executed"), proposal_id),
-        (executor.clone(), num_actions),
-    );
-}
-
-/// Emit when a participant vault receives and executes a cross-vault action
-pub fn emit_cross_vault_action_received(
-    env: &Env,
-    coordinator: &Address,
-    recipient: &Address,
-    token: &Address,
+    subscription_id: u64,
+    payment_number: u32,
     amount: i128,
 ) {
     env.events().publish(
-        (Symbol::new(env, "xvault_received"),),
-        (
-            coordinator.clone(),
-            recipient.clone(),
-            token.clone(),
-            amount,
-        ),
+        (Symbol::new(env, "subscription_renewed"), subscription_id),
+        (payment_number, amount),
     );
 }
 
-/// Emit when cross-vault configuration is updated
-pub fn emit_cross_vault_config_updated(env: &Env, admin: &Address) {
+/// Emit when a subscription is cancelled
+pub fn emit_subscription_cancelled(env: &Env, subscription_id: u64, cancelled_by: &Address) {
+    env.events().publish(
+        (Symbol::new(env, "subscription_cancelled"), subscription_id),
+        cancelled_by.clone(),
+    );
+}
+
+/// Emit when a subscription tier is upgraded
+pub fn emit_subscription_upgraded(
+    env: &Env,
+    subscription_id: u64,
+    old_tier: u32,
+    new_tier: u32,
+    new_amount: i128,
+) {
+    env.events().publish(
+        (Symbol::new(env, "subscription_upgraded"), subscription_id),
+        (old_tier, new_tier, new_amount),
+    );
+}
+
+/// Emit when a subscription expires
+#[allow(dead_code)]
+pub fn emit_subscription_expired(env: &Env, subscription_id: u64) {
     env.events()
-        .publish((Symbol::new(env, "xvault_cfg_updated"),), admin.clone());
-}
-
-// ============================================================================
-// Dispute Resolution Events (feature/dispute-resolution)
-// ============================================================================
-
-/// Emit when a dispute is filed against a proposal
-pub fn emit_dispute_filed(env: &Env, dispute_id: u64, proposal_id: u64, disputer: &Address) {
-    env.events().publish(
-        (Symbol::new(env, "dispute_filed"), dispute_id),
-        (proposal_id, disputer.clone()),
-    );
-}
-
-/// Emit when a dispute is resolved by an arbitrator
-pub fn emit_dispute_resolved(
-    env: &Env,
-    dispute_id: u64,
-    proposal_id: u64,
-    arbitrator: &Address,
-    resolution: u32,
-) {
-    env.events().publish(
-        (Symbol::new(env, "dispute_resolved"), dispute_id),
-        (proposal_id, arbitrator.clone(), resolution),
-    );
-}
-
-/// Emit when arbitrator list is updated
-pub fn emit_arbitrators_updated(env: &Env, admin: &Address, count: u32) {
-    env.events().publish(
-        (Symbol::new(env, "arbitrators_updated"),),
-        (admin.clone(), count),
-    );
+        .publish((Symbol::new(env, "subscription_expired"),), subscription_id);
 }
 // ============================================================================
 // Escrow Events (feature/escrow-system)
@@ -679,5 +673,75 @@ pub fn emit_escrow_dispute_resolved(
     env.events().publish(
         (Symbol::new(env, "escrow_resolved"), escrow_id),
         (arbitrator.clone(), released_to_recipient),
+    );
+}
+// ============================================================================
+// Wallet Recovery Events (feature/wallet-recovery)
+// ============================================================================
+
+/// Emit when a recovery proposal is created
+pub fn emit_recovery_proposed(env: &Env, recovery_id: u64, new_threshold: u32) {
+    env.events().publish(
+        (Symbol::new(env, "recovery_proposed"), recovery_id),
+        new_threshold,
+    );
+}
+
+/// Emit when a recovery proposal is approved by a guardian
+pub fn emit_recovery_approved(env: &Env, recovery_id: u64, guardian: &Address) {
+    env.events().publish(
+        (Symbol::new(env, "recovery_approved"), recovery_id),
+        guardian.clone(),
+    );
+}
+
+/// Emit when a recovery proposal is executed
+pub fn emit_recovery_executed(env: &Env, recovery_id: u64) {
+    env.events()
+        .publish((Symbol::new(env, "recovery_executed"), recovery_id), ());
+}
+
+/// Emit when a recovery proposal is cancelled
+pub fn emit_recovery_cancelled(env: &Env, recovery_id: u64, canceller: &Address) {
+    env.events().publish(
+        (Symbol::new(env, "recovery_cancelled"), recovery_id),
+        canceller.clone(),
+    );
+}
+
+/// Emit when recovery configuration is updated
+pub fn emit_recovery_config_updated(env: &Env, admin: &Address) {
+    env.events()
+        .publish((Symbol::new(env, "recovery_cfg_updated"),), admin.clone());
+}
+
+/// Emit when fee structure is updated
+pub fn emit_fee_structure_updated(env: &Env, admin: &Address, enabled: bool) {
+    env.events().publish(
+        (Symbol::new(env, "fee_structure_updated"),),
+        (admin.clone(), enabled),
+    );
+}
+
+/// Emit when a fee is collected from a transaction
+pub fn emit_fee_collected(
+    env: &Env,
+    user: &Address,
+    token: &Address,
+    amount: i128,
+    fee: i128,
+    fee_bps: u32,
+    reputation_discount_applied: bool,
+) {
+    env.events().publish(
+        (Symbol::new(env, "fee_collected"),),
+        (
+            user.clone(),
+            token.clone(),
+            amount,
+            fee,
+            fee_bps,
+            reputation_discount_applied,
+        ),
     );
 }
