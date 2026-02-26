@@ -2667,13 +2667,6 @@ impl VaultDAO {
             if id > 1 {
                 let prev_entry = storage::get_audit_entry(&env, id - 1)?;
                 if entry.prev_hash != prev_entry.hash {
-                    return Ok(false);
-                }
-            }
-        }
-
-        Ok(true)
-
             Self::update_reputation_on_execution(&env, &proposal);
             let exec_time = current_ledger.saturating_sub(proposal.created_at);
             storage::metrics_on_execution(&env, fee_estimate.total_fee, exec_time);
