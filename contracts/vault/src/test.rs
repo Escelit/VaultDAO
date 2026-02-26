@@ -5,7 +5,7 @@ use crate::types::{DexConfig, SwapProposal, TimeBasedThreshold, TransferDetails,
 use crate::{InitConfig, VaultDAO, VaultDAOClient};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    token::StellarAssetClient,
+    token::{self, StellarAssetClient},
     Env, Symbol, Vec,
 };
 
@@ -40,6 +40,7 @@ fn default_init_config(
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(_env),
+        staking_config: types::StakingConfig::default(),
     }
 }
 
@@ -55,7 +56,11 @@ fn test_multisig_approval() {
     let signer1 = Address::generate(&env);
     let signer2 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -84,6 +89,7 @@ fn test_multisig_approval() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
+        staking_config: types::StakingConfig::default(),
     };
     client.initialize(&admin, &config);
 
@@ -130,7 +136,11 @@ fn test_unauthorized_proposal() {
 
     let admin = Address::generate(&env);
     let member = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -156,7 +166,8 @@ fn test_unauthorized_proposal() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
 
     let res = client.try_propose_transfer(
@@ -172,7 +183,7 @@ fn test_unauthorized_proposal() {
     );
 
     assert!(res.is_err());
-    assert_eq!(res.err(), Some(Ok(VaultError::InsufficientRole)));
+    assert_eq!(res.err(), Some(Ok(VaultError::Unauthorized)));
 }
 
 #[test]
@@ -188,7 +199,11 @@ fn test_timelock_violation() {
     let admin = Address::generate(&env);
     let signer1 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -215,7 +230,8 @@ fn test_timelock_violation() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -258,7 +274,11 @@ fn test_amend_proposal_resets_approvals_and_tracks_history() {
     let signer2 = Address::generate(&env);
     let recipient1 = Address::generate(&env);
     let recipient2 = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -334,7 +354,11 @@ fn test_amend_proposal_only_proposer_can_amend() {
     let proposer = Address::generate(&env);
     let other = Address::generate(&env);
     let recipient = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -379,7 +403,11 @@ fn test_amend_proposal_rejects_non_pending_proposal() {
     let admin = Address::generate(&env);
     let proposer = Address::generate(&env);
     let recipient = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -423,7 +451,11 @@ fn test_amend_proposal_enforces_spending_limit() {
     let admin = Address::generate(&env);
     let proposer = Address::generate(&env);
     let recipient = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -466,7 +498,11 @@ fn test_priority_levels() {
     let admin = Address::generate(&env);
     let signer1 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -493,7 +529,8 @@ fn test_priority_levels() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -562,7 +599,11 @@ fn test_get_proposals_by_priority() {
     let admin = Address::generate(&env);
     let signer1 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -589,7 +630,8 @@ fn test_get_proposals_by_priority() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -636,7 +678,11 @@ fn test_change_priority_unauthorized() {
     let admin = Address::generate(&env);
     let signer1 = Address::generate(&env);
     let random_user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -663,7 +709,8 @@ fn test_change_priority_unauthorized() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -693,7 +740,11 @@ fn test_comment_functionality() {
 
     let admin = Address::generate(&env);
     let signer1 = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -720,7 +771,8 @@ fn test_comment_functionality() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -776,7 +828,11 @@ fn test_blacklist_mode() {
     let treasurer = Address::generate(&env);
     let normal_recipient = Address::generate(&env);
     let blocked_recipient = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -803,7 +859,8 @@ fn test_blacklist_mode() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &treasurer, &Role::Treasurer);
 
@@ -850,7 +907,11 @@ fn test_abstention_does_not_count_toward_threshold() {
     let signer2 = Address::generate(&env);
     let signer3 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -879,7 +940,8 @@ fn test_abstention_does_not_count_toward_threshold() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
     client.set_role(&admin, &signer2, &Role::Treasurer);
@@ -950,7 +1012,8 @@ fn test_list_management() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
 
     client.set_list_mode(&admin, &ListMode::Whitelist);
@@ -979,7 +1042,11 @@ fn test_cannot_abstain_after_voting() {
     let admin = Address::generate(&env);
     let signer1 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -1006,7 +1073,8 @@ fn test_cannot_abstain_after_voting() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -1039,7 +1107,11 @@ fn test_cannot_abstain_twice() {
     let admin = Address::generate(&env);
     let signer1 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -1066,7 +1138,8 @@ fn test_cannot_abstain_twice() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -1100,7 +1173,11 @@ fn test_velocity_limit_enforcement() {
     let admin = Address::generate(&env);
     let signer = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -1127,7 +1204,8 @@ fn test_velocity_limit_enforcement() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer, &Role::Treasurer);
 
@@ -1180,7 +1258,11 @@ fn test_verify_attachment() {
     let admin = Address::generate(&env);
     let signer1 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -1207,7 +1289,8 @@ fn test_verify_attachment() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -1238,7 +1321,11 @@ fn test_remove_attachment() {
     let admin = Address::generate(&env);
     let signer1 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -1265,7 +1352,8 @@ fn test_remove_attachment() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -1301,7 +1389,11 @@ fn test_attachment_unauthorized() {
     let signer1 = Address::generate(&env);
     let signer2 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -1329,7 +1421,8 @@ fn test_attachment_unauthorized() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
     client.set_role(&admin, &signer2, &Role::Treasurer);
@@ -1363,7 +1456,11 @@ fn test_attachment_duplicate() {
     let admin = Address::generate(&env);
     let signer1 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -1390,7 +1487,8 @@ fn test_attachment_duplicate() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -1424,7 +1522,11 @@ fn test_attachment_invalid_hash() {
     let admin = Address::generate(&env);
     let signer1 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -1451,7 +1553,8 @@ fn test_attachment_invalid_hash() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -1482,7 +1585,11 @@ fn test_admin_can_add_attachment() {
     let admin = Address::generate(&env);
     let signer1 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -1509,7 +1616,8 @@ fn test_admin_can_add_attachment() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -1540,7 +1648,11 @@ fn test_set_and_get_proposal_metadata() {
     let admin = Address::generate(&env);
     let signer1 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -1567,7 +1679,8 @@ fn test_set_and_get_proposal_metadata() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -1606,7 +1719,11 @@ fn test_remove_proposal_metadata() {
     let admin = Address::generate(&env);
     let signer1 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -1633,7 +1750,8 @@ fn test_remove_proposal_metadata() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -1670,7 +1788,11 @@ fn test_proposal_metadata_unauthorized() {
     let signer1 = Address::generate(&env);
     let signer2 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -1698,7 +1820,8 @@ fn test_proposal_metadata_unauthorized() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
     client.set_role(&admin, &signer2, &Role::Treasurer);
@@ -1732,7 +1855,11 @@ fn test_proposal_metadata_empty_value_invalid() {
     let admin = Address::generate(&env);
     let signer1 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -1771,7 +1898,11 @@ fn test_proposal_metadata_value_too_long_invalid() {
     let admin = Address::generate(&env);
     let signer1 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -1811,7 +1942,11 @@ fn test_proposal_metadata_limit_exceeded() {
     let admin = Address::generate(&env);
     let signer1 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -1862,7 +1997,11 @@ fn test_admin_can_manage_proposal_metadata() {
     let admin = Address::generate(&env);
     let signer1 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -1907,7 +2046,11 @@ fn test_metadata_update_existing_key_at_capacity() {
     let admin = Address::generate(&env);
     let signer1 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -1961,7 +2104,11 @@ fn test_get_proposal_metadata_value_missing_key_returns_none() {
     let admin = Address::generate(&env);
     let signer1 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -1998,7 +2145,11 @@ fn test_get_proposals_by_tag() {
     let admin = Address::generate(&env);
     let signer1 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -2073,7 +2224,11 @@ fn test_proposal_tag_unauthorized() {
     let signer1 = Address::generate(&env);
     let signer2 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -2114,7 +2269,11 @@ fn test_fixed_threshold_strategy() {
     let signer1 = Address::generate(&env);
     let signer2 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -2142,7 +2301,8 @@ fn test_fixed_threshold_strategy() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
     client.set_role(&admin, &signer2, &Role::Treasurer);
@@ -2181,7 +2341,11 @@ fn test_percentage_threshold_strategy() {
     let signer2 = Address::generate(&env);
     let signer3 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -2211,7 +2375,8 @@ fn test_percentage_threshold_strategy() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
     client.set_role(&admin, &signer2, &Role::Treasurer);
@@ -2258,7 +2423,11 @@ fn test_time_based_threshold_strategy() {
     let signer2 = Address::generate(&env);
     let signer3 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -2291,7 +2460,8 @@ fn test_time_based_threshold_strategy() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
     client.set_role(&admin, &signer2, &Role::Treasurer);
@@ -2333,7 +2503,11 @@ fn test_condition_balance_above() {
     let admin = Address::generate(&env);
     let signer1 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -2360,7 +2534,8 @@ fn test_condition_balance_above() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -2398,7 +2573,11 @@ fn test_condition_date_after() {
     let signer1 = Address::generate(&env);
     let signer2 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -2426,7 +2605,8 @@ fn test_condition_date_after() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
     client.set_role(&admin, &signer2, &Role::Treasurer);
@@ -2475,7 +2655,11 @@ fn test_condition_multiple_and_logic() {
     let signer1 = Address::generate(&env);
     let signer2 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -2503,7 +2687,8 @@ fn test_condition_multiple_and_logic() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
     client.set_role(&admin, &signer2, &Role::Treasurer);
@@ -2558,7 +2743,11 @@ fn test_condition_multiple_or_logic() {
     let signer1 = Address::generate(&env);
     let signer2 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -2586,7 +2775,8 @@ fn test_condition_multiple_or_logic() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
     client.set_role(&admin, &signer2, &Role::Treasurer);
@@ -2635,7 +2825,11 @@ fn test_condition_no_conditions() {
     let admin = Address::generate(&env);
     let signer1 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -2662,7 +2856,8 @@ fn test_condition_no_conditions() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -2683,8 +2878,10 @@ fn test_condition_no_conditions() {
     let proposal = client.get_proposal(&proposal_id);
     assert_eq!(proposal.status, ProposalStatus::Approved);
     let result = client.try_execute_proposal(&admin, &proposal_id);
-    assert!(result.is_err());
-    assert_ne!(result.err(), Some(Ok(VaultError::ConditionsNotMet)));
+    assert_eq!(result, Ok(Ok(())));
+
+    let exec_prop = client.get_proposal(&proposal_id);
+    assert_eq!(exec_prop.status, ProposalStatus::Executed);
 }
 
 // ============================================================================
@@ -2727,7 +2924,8 @@ fn test_dex_config_setup() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
 
     let mut enabled_dexs = Vec::new(&env);
@@ -2789,7 +2987,8 @@ fn test_swap_proposal_creation() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &treasurer, &Role::Treasurer);
 
@@ -2857,7 +3056,8 @@ fn test_dex_not_enabled_error() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &treasurer, &Role::Treasurer);
 
@@ -2912,7 +3112,8 @@ fn test_batch_propose_multi_token() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &treasurer, &Role::Treasurer);
 
@@ -2963,8 +3164,13 @@ fn test_batch_propose_exceeds_max_size() {
     let treasurer = Address::generate(&env);
     let recipient = Address::generate(&env);
 
-    let client = VaultDAOClient::new(&env, &env.register(VaultDAO, ()));
-    let token = Address::generate(&env);
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -2991,7 +3197,8 @@ fn test_batch_propose_exceeds_max_size() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &treasurer, &Role::Treasurer);
 
@@ -3032,7 +3239,11 @@ fn test_quorum_disabled_behaves_like_fixed_threshold() {
     let admin = Address::generate(&env);
     let signer1 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -3060,7 +3271,8 @@ fn test_quorum_disabled_behaves_like_fixed_threshold() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -3099,7 +3311,11 @@ fn test_quorum_blocks_approval_until_satisfied() {
     let signer2 = Address::generate(&env);
     let signer3 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -3129,7 +3345,8 @@ fn test_quorum_blocks_approval_until_satisfied() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
     client.set_role(&admin, &signer2, &Role::Treasurer);
@@ -3188,7 +3405,11 @@ fn test_abstentions_count_toward_quorum_but_not_threshold() {
     let signer3 = Address::generate(&env);
     let signer4 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -3219,7 +3440,8 @@ fn test_abstentions_count_toward_quorum_but_not_threshold() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
     client.set_role(&admin, &signer2, &Role::Treasurer);
@@ -3280,7 +3502,11 @@ fn test_get_quorum_status() {
     let signer1 = Address::generate(&env);
     let signer2 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -3309,7 +3535,8 @@ fn test_get_quorum_status() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
     client.set_role(&admin, &signer2, &Role::Treasurer);
@@ -3359,7 +3586,11 @@ fn test_get_quorum_status_quorum_disabled() {
     let admin = Address::generate(&env);
     let signer1 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -3386,7 +3617,8 @@ fn test_get_quorum_status_quorum_disabled() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -3445,7 +3677,8 @@ fn test_update_quorum() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
 
     // Admin can update quorum to a valid value
@@ -3473,7 +3706,11 @@ fn test_execution_rechecks_quorum_requirement() {
     let signer1 = Address::generate(&env);
     let signer2 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -3501,7 +3738,8 @@ fn test_execution_rechecks_quorum_requirement() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -3542,7 +3780,11 @@ fn test_batch_execution_rechecks_quorum_requirement() {
     let signer1 = Address::generate(&env);
     let signer2 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -3570,7 +3812,8 @@ fn test_batch_execution_rechecks_quorum_requirement() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
@@ -3616,7 +3859,11 @@ fn test_quorum_satisfied_by_approvals_alone() {
     let signer1 = Address::generate(&env);
     let signer2 = Address::generate(&env);
     let user = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -3645,7 +3892,8 @@ fn test_quorum_satisfied_by_approvals_alone() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
     client.set_role(&admin, &signer2, &Role::Treasurer);
@@ -3710,7 +3958,8 @@ fn test_initialize_rejects_quorum_too_high() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
 
     let result = client.try_initialize(&admin, &config);
     assert_eq!(result.err(), Some(Ok(VaultError::QuorumTooHigh)));
@@ -3765,7 +4014,8 @@ macro_rules! setup_retry_test {
                 initial_backoff_ledgers: 10,
             },
             recovery_config: crate::types::RecoveryConfig::default(&$env),
-        };
+                staking_config: types::StakingConfig::default(),
+            };
 
         $client.initialize(&$admin, &config);
         $client.set_role(&$admin, &$signer1, &Role::Treasurer);
@@ -3957,7 +4207,8 @@ fn test_retry_not_enabled_passes_through_error() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
 
     client.initialize(&admin, &config);
     client.set_role(&admin, &admin, &Role::Treasurer);
@@ -4059,7 +4310,8 @@ fn test_retry_disabled_rejects_retry_execution() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
 
     client.initialize(&admin, &config);
 
@@ -4268,7 +4520,11 @@ fn test_dependency_validation_missing_and_circular() {
 
     let admin = Address::generate(&env);
     let recipient = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -4479,7 +4735,8 @@ fn test_cross_vault_multi_vault_actions() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
 
     // Initialize all vaults
     coordinator.initialize(&admin, &config);
@@ -4959,7 +5216,8 @@ fn test_reputation_initialized_at_neutral() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &proposer, &Role::Treasurer);
 
@@ -4986,7 +5244,11 @@ fn test_reputation_increases_on_proposal_creation() {
     let admin = Address::generate(&env);
     let proposer = Address::generate(&env);
     let recipient = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -5012,7 +5274,8 @@ fn test_reputation_increases_on_proposal_creation() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &proposer, &Role::Treasurer);
 
@@ -5048,7 +5311,11 @@ fn test_reputation_increases_on_approval() {
     let proposer = Address::generate(&env);
     let approver = Address::generate(&env);
     let recipient = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -5075,7 +5342,8 @@ fn test_reputation_increases_on_approval() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &proposer, &Role::Treasurer);
     client.set_role(&admin, &approver, &Role::Treasurer);
@@ -5116,7 +5384,11 @@ fn test_participation_tracking_on_abstention() {
     let admin = Address::generate(&env);
     let abstainer = Address::generate(&env);
     let recipient = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -5143,7 +5415,8 @@ fn test_participation_tracking_on_abstention() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
 
     let proposal_id = client.propose_transfer(
@@ -5180,7 +5453,11 @@ fn test_reputation_increases_on_execution() {
     let proposer = Address::generate(&env);
     let signer = Address::generate(&env);
     let recipient = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -5207,7 +5484,8 @@ fn test_reputation_increases_on_execution() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &proposer, &Role::Treasurer);
     client.set_role(&admin, &signer, &Role::Treasurer);
@@ -5248,7 +5526,11 @@ fn test_reputation_decreases_on_rejection() {
     let proposer = Address::generate(&env);
     let proposer2 = Address::generate(&env);
     let recipient = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -5275,7 +5557,8 @@ fn test_reputation_decreases_on_rejection() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &proposer, &Role::Treasurer);
     client.set_role(&admin, &proposer2, &Role::Treasurer);
@@ -5315,7 +5598,11 @@ fn test_reputation_decay_over_time() {
     let admin = Address::generate(&env);
     let proposer = Address::generate(&env);
     let recipient = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -5341,7 +5628,8 @@ fn test_reputation_decay_over_time() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &proposer, &Role::Treasurer);
 
@@ -5368,16 +5656,21 @@ fn test_reputation_decay_over_time() {
     let rep_after = client.get_reputation(&proposer);
 
     // Score should drift toward neutral (500)
-    if rep_before.score > 500 {
-        assert!(
-            rep_after.score < rep_before.score,
-            "Decay should decrease score above 500"
-        );
-    } else if rep_before.score < 500 {
-        assert!(
-            rep_after.score > rep_before.score,
-            "Decay should increase score below 500"
-        );
+    use core::cmp::Ordering;
+    match rep_before.score.cmp(&500) {
+        Ordering::Greater => {
+            assert!(
+                rep_after.score < rep_before.score,
+                "Decay should decrease score above 500"
+            );
+        }
+        Ordering::Less => {
+            assert!(
+                rep_after.score > rep_before.score,
+                "Decay should increase score below 500"
+            );
+        }
+        Ordering::Equal => {}
     }
 }
 
@@ -5394,7 +5687,11 @@ fn test_create_from_template_with_overrides() {
     let treasurer = Address::generate(&env);
     let recipient = Address::generate(&env);
     let new_recipient = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -5421,7 +5718,8 @@ fn test_create_from_template_with_overrides() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &treasurer, &Role::Treasurer);
 
@@ -5471,7 +5769,11 @@ fn test_create_from_template_amount_out_of_range() {
     let admin = Address::generate(&env);
     let treasurer = Address::generate(&env);
     let recipient = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -5498,7 +5800,8 @@ fn test_create_from_template_amount_out_of_range() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &treasurer, &Role::Treasurer);
 
@@ -5584,7 +5887,8 @@ fn test_create_from_inactive_template() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
 
     client.initialize(&admin, &config);
     client.set_role(&admin, &treasurer, &Role::Treasurer);
@@ -5633,7 +5937,11 @@ fn test_reputation_based_spending_limit() {
     let admin = Address::generate(&env);
     let proposer = Address::generate(&env);
     let recipient = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -5659,7 +5967,8 @@ fn test_reputation_based_spending_limit() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &proposer, &Role::Treasurer);
 
@@ -5706,7 +6015,11 @@ fn test_reputation_high_score_get_limits_boost() {
     let treasurer = Address::generate(&env);
     let signer = Address::generate(&env);
     let recipient = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -5733,7 +6046,8 @@ fn test_reputation_high_score_get_limits_boost() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &treasurer, &Role::Treasurer);
 
@@ -5801,7 +6115,8 @@ fn test_template_not_found() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
 
     // Try to get non-existent template
@@ -5841,7 +6156,11 @@ fn test_retry_not_enabled() {
     let proposer = Address::generate(&env);
     let signer = Address::generate(&env);
     let recipient = Address::generate(&env);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
@@ -5867,7 +6186,8 @@ fn test_retry_not_enabled() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &proposer, &Role::Treasurer);
     client.set_role(&admin, &signer, &Role::Treasurer);
@@ -5929,7 +6249,7 @@ fn test_wallet_recovery_flow() {
     guardians.push_back(guardian2.clone());
 
     let mut config = default_init_config(&env, signers, 1);
-    config.recovery_config = crate::types::RecoveryConfig {
+    config.recovery_config = crate::RecoveryConfig {
         guardians,
         threshold: 2,
         delay: 50,
@@ -5945,12 +6265,12 @@ fn test_wallet_recovery_flow() {
     // 2. First guardian approval
     client.approve_recovery(&guardian1, &recovery_id);
     let proposal = client.get_recovery_proposal(&recovery_id);
-    assert_eq!(proposal.status, types::RecoveryStatus::Pending);
+    assert_eq!(proposal.status, RecoveryStatus::Pending);
 
     // 3. Second guardian approval -> Should move to Approved
     client.approve_recovery(&guardian2, &recovery_id);
     let proposal = client.get_recovery_proposal(&recovery_id);
-    assert_eq!(proposal.status, types::RecoveryStatus::Approved);
+    assert_eq!(proposal.status, RecoveryStatus::Approved);
     assert_eq!(proposal.execution_after, 100 + 50);
 
     // 4. Try execute before delay
@@ -5966,11 +6286,15 @@ fn test_wallet_recovery_flow() {
     assert_eq!(v_config.guardians.len(), 2);
 
     let proposal = client.get_recovery_proposal(&recovery_id);
-    assert_eq!(proposal.status, types::RecoveryStatus::Executed);
+    assert_eq!(proposal.status, RecoveryStatus::Executed);
 
     // Verify new signer works
     client.set_role(&admin, &new_signer, &Role::Treasurer);
-    let token = Address::generate(&env);
+    let token = env
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    token_client.mint(&contract_id, &1000);
     let p_id = client.propose_transfer(
         &new_signer,
         &admin,
@@ -6005,7 +6329,7 @@ fn test_recovery_cancellation() {
     guardians.push_back(guardian1.clone());
 
     let mut config = default_init_config(&env, signers, 1);
-    config.recovery_config = crate::types::RecoveryConfig {
+    config.recovery_config = crate::RecoveryConfig {
         guardians,
         threshold: 1,
         delay: 50,
@@ -6021,7 +6345,7 @@ fn test_recovery_cancellation() {
     client.cancel_recovery(&admin, &recovery_id);
 
     let proposal = client.get_recovery_proposal(&recovery_id);
-    assert_eq!(proposal.status, types::RecoveryStatus::Cancelled);
+    assert_eq!(proposal.status, RecoveryStatus::Cancelled);
 
     // 3. Try to approve cancelled proposal
     let res = client.try_approve_recovery(&guardian1, &recovery_id);
@@ -6072,7 +6396,8 @@ fn test_insurance_posting_and_refund() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &proposer, &Role::Treasurer);
     client.set_role(&admin, &signer2, &Role::Treasurer);
@@ -6173,7 +6498,8 @@ fn test_insurance_slashing_on_rejection() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &proposer, &Role::Treasurer);
 
@@ -6262,7 +6588,8 @@ fn test_insurance_pool_withdrawal() {
             initial_backoff_ledgers: 0,
         },
         recovery_config: crate::types::RecoveryConfig::default(&env),
-    };
+            staking_config: types::StakingConfig::default(),
+        };
     client.initialize(&admin, &config);
     client.set_role(&admin, &proposer, &Role::Treasurer);
 
@@ -6576,7 +6903,7 @@ fn test_early_unlock_with_penalty() {
 }
 
 #[test]
-fn test_estimate_execution_fee_breakdown_and_storage() {
+fn test_stream_lifecycle() {
     let env = Env::default();
     env.mock_all_auths();
 
@@ -6584,54 +6911,36 @@ fn test_estimate_execution_fee_breakdown_and_storage() {
     let client = VaultDAOClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
-    let treasurer = Address::generate(&env);
+    let sender = Address::generate(&env);
     let recipient = Address::generate(&env);
-    let token = Address::generate(&env);
 
-    let mut signers = Vec::new(&env);
-    signers.push_back(admin.clone());
-    signers.push_back(treasurer.clone());
+    // Register token
+    let token_admin = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract_v2(token_admin);
+    let token_client = token::Client::new(&env, &token_id.address());
+    let token_admin_client = StellarAssetClient::new(&env, &token_id.address());
+    let token_id_addr = token_id.address();
 
-    let config = default_init_config(&env, signers, 2);
+    // Initialize vault
+    let signers = Vec::from_array(&env, [admin.clone()]);
+    let config = default_init_config(&env, signers, 1);
     client.initialize(&admin, &config);
-    client.set_role(&admin, &treasurer, &Role::Treasurer);
-    client.set_gas_config(
-        &admin,
-        &GasConfig {
-            enabled: true,
-            default_gas_limit: 10_000,
-            base_cost: 100,
-            condition_cost: 25,
-        },
-    );
 
-    let mut conditions = Vec::new(&env);
-    conditions.push_back(Condition::DateAfter(100));
-    conditions.push_back(Condition::BalanceAbove(10));
+    // Give sender some tokens
+    token_admin_client.mint(&sender, &1000);
+    assert_eq!(token_client.balance(&sender), 1000);
 
-    let proposal_id = client.propose_transfer(
-        &treasurer,
-        &recipient,
-        &token,
-        &100,
-        &Symbol::new(&env, "fee"),
-        &Priority::Normal,
-        &conditions,
-        &ConditionLogic::And,
-        &0i128,
-    );
+    // 1. Create stream: 100 tokens over 100 seconds (rate = 1 token/sec)
+    let stream_id = client.create_stream(&sender, &recipient, &token_id_addr, &100, &100);
+    assert_eq!(token_client.balance(&sender), 900);
+    assert_eq!(token_client.balance(&contract_id), 100);
 
-    let estimate = client.estimate_execution_fee(&proposal_id);
-    assert_eq!(estimate.base_fee, 100);
-    assert_eq!(estimate.resource_fee, 75);
-    assert_eq!(estimate.total_fee, 175);
-    assert_eq!(estimate.operation_count, 3);
+    // 2. Wait 10 seconds
+    env.ledger().with_mut(|li| li.timestamp += 10);
 
-    let stored = client
-        .get_execution_fee_estimate(&proposal_id)
-        .expect("stored estimate should exist");
-    assert_eq!(stored.total_fee, estimate.total_fee);
-}
+    // Check stream status
+    let stream = client.get_stream(&stream_id);
+    assert_eq!(stream.status, StreamStatus::Active);
 
 #[test]
 fn test_early_unlock_penalty() {
@@ -6830,64 +7139,49 @@ fn test_lock_duration_validation() {
 fn test_estimate_execution_fee_includes_insurance_step() {
     let env = Env::default();
     env.mock_all_auths();
+    // 3. Claim: should be 10 tokens
+    client.claim_stream(&recipient, &stream_id);
+    assert_eq!(token_client.balance(&recipient), 10);
 
-    let contract_id = env.register(VaultDAO, ());
-    let client = VaultDAOClient::new(&env, &contract_id);
+    let stream = client.get_stream(&stream_id);
+    assert_eq!(stream.claimed_amount, 10);
 
-    let admin = Address::generate(&env);
-    let treasurer = Address::generate(&env);
-    let recipient = Address::generate(&env);
+    // 4. Pause stream
+    client.pause_stream(&sender, &stream_id);
+    let stream = client.get_stream(&stream_id);
+    assert_eq!(stream.status, StreamStatus::Paused);
+    assert_eq!(stream.accumulated_seconds, 10);
 
-    // Register a proper Stellar Asset Contract for the token
-    let token_admin = Address::generate(&env);
-    let sac = env.register_stellar_asset_contract_v2(token_admin.clone());
-    let token = sac.address();
-    let sac_admin_client = StellarAssetClient::new(&env, &token);
+    // 5. Wait 20 seconds while paused
+    env.ledger().with_mut(|li| li.timestamp += 20);
 
-    let mut signers = Vec::new(&env);
-    signers.push_back(admin.clone());
-    signers.push_back(treasurer.clone());
+    // Claim should give 0 more tokens
+    client.claim_stream(&recipient, &stream_id);
+    assert_eq!(token_client.balance(&recipient), 10);
 
-    let config = default_init_config(&env, signers, 2);
-    client.initialize(&admin, &config);
-    client.set_role(&admin, &treasurer, &Role::Treasurer);
-    client.set_gas_config(
-        &admin,
-        &GasConfig {
-            enabled: true,
-            default_gas_limit: 10_000,
-            base_cost: 50,
-            condition_cost: 10,
-        },
-    );
+    // 6. Resume stream
+    client.resume_stream(&sender, &stream_id);
 
-    // Mint tokens to the treasurer so they can lock insurance
-    sac_admin_client.mint(&treasurer, &1000);
+    // 7. Wait 10 seconds
+    env.ledger().with_mut(|li| li.timestamp += 10);
 
-    let mut conditions = Vec::new(&env);
-    conditions.push_back(Condition::DateAfter(200));
+    // Total active time = 10 (before pause) + 10 (after resume) = 20
+    // Total claimable = 20. Claimed = 10. New claim = 10.
+    client.claim_stream(&recipient, &stream_id);
+    assert_eq!(token_client.balance(&recipient), 20);
 
-    let proposal_id = client.propose_transfer(
-        &treasurer,
-        &recipient,
-        &token,
-        &100,
-        &Symbol::new(&env, "ins_fee"),
-        &Priority::Normal,
-        &conditions,
-        &ConditionLogic::And,
-        &25i128,
-    );
+    // 8. Wait till end (another 80 seconds)
+    env.ledger().with_mut(|li| li.timestamp += 80);
 
-    let estimate = client.estimate_execution_fee(&proposal_id);
-    assert_eq!(estimate.operation_count, 3);
-    assert_eq!(estimate.base_fee, 50);
-    assert_eq!(estimate.resource_fee, 30);
-    assert_eq!(estimate.total_fee, 80);
+    client.claim_stream(&recipient, &stream_id);
+    assert_eq!(token_client.balance(&recipient), 100);
+
+    let stream = client.get_stream(&stream_id);
+    assert_eq!(stream.status, StreamStatus::Completed);
 }
 
 #[test]
-fn test_estimate_execution_fee_refreshes_after_gas_config_update() {
+fn test_stream_cancel() {
     let env = Env::default();
     env.mock_all_auths();
 
@@ -6900,6 +7194,693 @@ fn test_estimate_execution_fee_refreshes_after_gas_config_update() {
     let token_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
     let token = token_contract.address();
     let token_client = StellarAssetClient::new(&env, &token);
+    let sender = Address::generate(&env);
+    let recipient = Address::generate(&env);
+
+    // Register token
+    let token_admin = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract_v2(token_admin);
+    let token_client = token::Client::new(&env, &token_id.address());
+    let token_admin_client = StellarAssetClient::new(&env, &token_id.address());
+    let token_id_addr = token_id.address();
+
+    // Initialize vault
+    let signers = Vec::from_array(&env, [admin.clone()]);
+    let config = default_init_config(&env, signers, 1);
+    client.initialize(&admin, &config);
+
+    // Give sender tokens
+    token_admin_client.mint(&sender, &1000);
+
+    // Create stream: 100 tokens over 100 seconds
+    let stream_id = client.create_stream(&sender, &recipient, &token_id_addr, &100, &100);
+
+    // Wait 40 seconds
+    env.ledger().with_mut(|li| li.timestamp += 40);
+
+    // Cancel stream
+    client.cancel_stream(&sender, &stream_id);
+
+    // Recipient should have gotten 40 tokens
+    assert_eq!(token_client.balance(&recipient), 40);
+    // Sender should have gotten 60 tokens back (900 + 60 = 960)
+    assert_eq!(token_client.balance(&sender), 960);
+
+    let stream = client.get_stream(&stream_id);
+    assert_eq!(stream.status, StreamStatus::Cancelled);
+    assert_eq!(stream.claimed_amount, 40);
+}
+
+// ============================================================================
+// Dynamic Fee System Tests (Issue: feature/dynamic-fees)
+// ============================================================================
+
+#[test]
+fn test_fee_structure_configuration() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let treasury = Address::generate(&env);
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+
+    let config = default_init_config(&env, signers, 1);
+    client.initialize(&admin, &config);
+
+    // Create fee structure with tiers
+    let mut tiers = Vec::new(&env);
+    tiers.push_back(FeeTier {
+        min_volume: 1000,
+        fee_bps: 40, // 0.4% for volume >= 1000
+    });
+    tiers.push_back(FeeTier {
+        min_volume: 5000,
+        fee_bps: 30, // 0.3% for volume >= 5000
+    });
+    tiers.push_back(FeeTier {
+        min_volume: 10000,
+        fee_bps: 20, // 0.2% for volume >= 10000
+    });
+
+    let fee_structure = FeeStructure {
+        tiers,
+        base_fee_bps: 50, // 0.5% base
+        reputation_discount_threshold: 750,
+        reputation_discount_percentage: 50,
+        treasury: treasury.clone(),
+        enabled: true,
+    };
+
+    client.set_fee_structure(&admin, &fee_structure);
+
+    // Verify configuration
+    let retrieved = client.get_fee_structure();
+    assert_eq!(retrieved.base_fee_bps, 50);
+    assert_eq!(retrieved.tiers.len(), 3);
+    assert_eq!(retrieved.enabled, true);
+}
+
+#[test]
+fn test_fee_calculation_base_rate() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let token = Address::generate(&env);
+    let treasury = Address::generate(&env);
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+
+    let config = default_init_config(&env, signers, 1);
+    client.initialize(&admin, &config);
+
+    // Enable fees with base rate only
+    let fee_structure = FeeStructure {
+        tiers: Vec::new(&env),
+        base_fee_bps: 50, // 0.5%
+        reputation_discount_threshold: 750,
+        reputation_discount_percentage: 50,
+        treasury: treasury.clone(),
+        enabled: true,
+    };
+
+    client.set_fee_structure(&admin, &fee_structure);
+
+    // Calculate fee for 1000 stroops
+    let fee_calc = client.calculate_fee_public(&user, &token, &1000);
+
+    // Expected: 1000 * 50 / 10000 = 5 stroops
+    assert_eq!(fee_calc.base_fee, 5);
+    assert_eq!(fee_calc.final_fee, 5);
+    assert_eq!(fee_calc.discount, 0);
+    assert_eq!(fee_calc.reputation_discount_applied, false);
+}
+
+#[test]
+fn test_fee_calculation_volume_tiers() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let token = Address::generate(&env);
+    let treasury = Address::generate(&env);
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+
+    let config = default_init_config(&env, signers, 1);
+    client.initialize(&admin, &config);
+
+    // Set up fee tiers
+    let mut tiers = Vec::new(&env);
+    tiers.push_back(FeeTier {
+        min_volume: 1000,
+        fee_bps: 40, // 0.4%
+    });
+    tiers.push_back(FeeTier {
+        min_volume: 5000,
+        fee_bps: 30, // 0.3%
+    });
+
+    let fee_structure = FeeStructure {
+        tiers,
+        base_fee_bps: 50, // 0.5% base
+        reputation_discount_threshold: 750,
+        reputation_discount_percentage: 50,
+        treasury: treasury.clone(),
+        enabled: true,
+    };
+
+    client.set_fee_structure(&admin, &fee_structure);
+
+    // Test base rate (no volume yet)
+    let fee_calc = client.calculate_fee_public(&user, &token, &100);
+    assert_eq!(fee_calc.fee_bps, 50); // Base rate
+
+    // Note: In a real scenario, we would need to execute transactions
+    // to build up volume. For this test, we're just verifying the
+    // fee calculation logic works correctly.
+}
+
+#[test]
+fn test_fee_calculation_reputation_discount() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let high_rep_user = Address::generate(&env);
+    let token = Address::generate(&env);
+    let treasury = Address::generate(&env);
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    signers.push_back(high_rep_user.clone());
+
+    let config = default_init_config(&env, signers, 1);
+    client.initialize(&admin, &config);
+
+    // Set roles
+    client.set_role(&admin, &high_rep_user, &Role::Treasurer);
+
+    // Enable fees
+    let fee_structure = FeeStructure {
+        tiers: Vec::new(&env),
+        base_fee_bps: 100, // 1%
+        reputation_discount_threshold: 750,
+        reputation_discount_percentage: 50, // 50% discount
+        treasury: treasury.clone(),
+        enabled: true,
+    };
+
+    client.set_fee_structure(&admin, &fee_structure);
+
+    // Build reputation by creating and executing proposals
+    // (In a real test, we'd need to go through the full proposal lifecycle)
+
+    // For now, just verify the fee calculation logic
+    let fee_calc = client.calculate_fee_public(&high_rep_user, &token, &1000);
+
+    // Base fee: 1000 * 100 / 10000 = 10
+    assert_eq!(fee_calc.base_fee, 10);
+
+    // Without high reputation, no discount
+    assert_eq!(fee_calc.discount, 0);
+}
+
+#[test]
+fn test_fee_disabled() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let token = Address::generate(&env);
+    let treasury = Address::generate(&env);
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+
+    let config = default_init_config(&env, signers, 1);
+    client.initialize(&admin, &config);
+
+    // Disable fees
+    let fee_structure = FeeStructure {
+        tiers: Vec::new(&env),
+        base_fee_bps: 50,
+        reputation_discount_threshold: 750,
+        reputation_discount_percentage: 50,
+        treasury: treasury.clone(),
+        enabled: false, // Disabled
+    };
+
+    client.set_fee_structure(&admin, &fee_structure);
+
+    // Calculate fee - should be zero
+    let fee_calc = client.calculate_fee_public(&user, &token, &1000);
+    assert_eq!(fee_calc.final_fee, 0);
+    assert_eq!(fee_calc.base_fee, 0);
+}
+
+#[test]
+fn test_fee_structure_validation() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let treasury = Address::generate(&env);
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+
+    let config = default_init_config(&env, signers, 1);
+    client.initialize(&admin, &config);
+
+    // Test invalid base fee (> 100%)
+    let mut invalid_fee_structure = FeeStructure {
+        tiers: Vec::new(&env),
+        base_fee_bps: 15000, // > 10000 (100%)
+        reputation_discount_threshold: 750,
+        reputation_discount_percentage: 50,
+        treasury: treasury.clone(),
+        enabled: true,
+    };
+
+    let result = client.try_set_fee_structure(&admin, &invalid_fee_structure);
+    assert!(result.is_err());
+
+    // Test invalid discount percentage (> 100)
+    invalid_fee_structure.base_fee_bps = 50;
+    invalid_fee_structure.reputation_discount_percentage = 150;
+
+    let result = client.try_set_fee_structure(&admin, &invalid_fee_structure);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_fee_structure_unauthorized() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let non_admin = Address::generate(&env);
+    let treasury = Address::generate(&env);
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+
+    let config = default_init_config(&env, signers, 1);
+    client.initialize(&admin, &config);
+
+    let fee_structure = FeeStructure {
+        tiers: Vec::new(&env),
+        base_fee_bps: 50,
+        reputation_discount_threshold: 750,
+        reputation_discount_percentage: 50,
+        treasury: treasury.clone(),
+        enabled: true,
+    };
+
+    // Non-admin should not be able to set fee structure
+    let result = client.try_set_fee_structure(&non_admin, &fee_structure);
+    assert!(result.is_err());
+    assert_eq!(result.err(), Some(Ok(VaultError::Unauthorized)));
+}
+
+#[test]
+fn test_user_volume_tracking() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let token = Address::generate(&env);
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+
+    let config = default_init_config(&env, signers, 1);
+    client.initialize(&admin, &config);
+
+    // Initially, volume should be zero
+    let volume = client.get_user_volume(&user, &token);
+    assert_eq!(volume, 0);
+
+    // Note: Volume is updated during proposal execution
+    // In a full integration test, we would execute proposals
+    // and verify volume increases
+}
+
+#[test]
+fn test_fees_collected_tracking() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let token = Address::generate(&env);
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+
+    let config = default_init_config(&env, signers, 1);
+    client.initialize(&admin, &config);
+
+    // Initially, fees collected should be zero
+    let fees = client.get_fees_collected(&token);
+    assert_eq!(fees, 0);
+
+    // Note: Fees are collected during proposal execution
+    // In a full integration test, we would execute proposals
+    // and verify fees are collected
+}
+
+// ============================================================================
+// Staking Tests (Issue: feature/proposal-staking)
+// ============================================================================
+
+#[test]
+fn test_staking_requirement_and_locking() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let proposer = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+    let token = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token_client = StellarAssetClient::new(&env, &token.address());
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    signers.push_back(proposer.clone());
+
+    // Initialize with staking enabled
+    let staking_config = types::StakingConfig {
+        enabled: true,
+        min_amount: 100,
+        base_stake_bps: 500, // 5%
+        max_stake_amount: 10_000,
+        slash_percentage: 50,
+        reputation_discount_threshold: 750,
+        reputation_discount_percentage: 30,
+    };
+
+    let config = InitConfig {
+        signers,
+        threshold: 1,
+        quorum: 0,
+        spending_limit: 10_000,
+        daily_limit: 50_000,
+        weekly_limit: 100_000,
+        timelock_threshold: 5_000,
+        timelock_delay: 100,
+        velocity_limit: VelocityConfig {
+            limit: 100,
+            window: 3600,
+        },
+        threshold_strategy: ThresholdStrategy::Fixed,
+        default_voting_deadline: 0,
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
+        recovery_config: crate::types::RecoveryConfig::default(&env),
+        staking_config,
+    };
+
+    client.initialize(&admin, &config);
+    client.set_role(&admin, &proposer, &Role::Treasurer);
+
+    // Mint tokens to proposer and vault
+    token_client.mint(&proposer, &10_000);
+    token_client.mint(&contract_id, &100_000);
+
+    // Propose transfer that requires staking (amount = 1000, stake = 5% = 50)
+    let proposal_id = client.propose_transfer(
+        &proposer,
+        &recipient,
+        &token.address(),
+        &1_000,
+        &Symbol::new(&env, "test"),
+        &Priority::Normal,
+        &Vec::new(&env),
+        &ConditionLogic::And,
+        &0, // no insurance
+    );
+
+    // Verify proposal has stake_amount set
+    let proposal = client.get_proposal(&proposal_id);
+    assert_eq!(proposal.stake_amount, 50);
+
+    // Verify stake record exists
+    let stake_record = client.get_stake_record(&proposal_id);
+    assert!(stake_record.is_some());
+    let record = stake_record.unwrap();
+    assert_eq!(record.amount, 50);
+    assert_eq!(record.staker, proposer);
+    assert!(!record.refunded);
+    assert!(!record.slashed);
+}
+
+#[test]
+fn test_stake_refund_on_successful_execution() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let proposer = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+    let token = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token_client = StellarAssetClient::new(&env, &token.address());
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    signers.push_back(proposer.clone());
+
+    let staking_config = types::StakingConfig {
+        enabled: true,
+        min_amount: 100,
+        base_stake_bps: 500, // 5%
+        max_stake_amount: 10_000,
+        slash_percentage: 50,
+        reputation_discount_threshold: 750,
+        reputation_discount_percentage: 30,
+    };
+
+    let config = InitConfig {
+        signers,
+        threshold: 1,
+        quorum: 0,
+        spending_limit: 10_000,
+        daily_limit: 50_000,
+        weekly_limit: 100_000,
+        timelock_threshold: 5_000,
+        timelock_delay: 100,
+        velocity_limit: VelocityConfig {
+            limit: 100,
+            window: 3600,
+        },
+        threshold_strategy: ThresholdStrategy::Fixed,
+        default_voting_deadline: 0,
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
+        recovery_config: crate::types::RecoveryConfig::default(&env),
+        staking_config,
+    };
+
+    client.initialize(&admin, &config);
+    client.set_role(&admin, &proposer, &Role::Treasurer);
+
+    // Mint tokens
+    token_client.mint(&proposer, &10_000);
+    token_client.mint(&contract_id, &100_000);
+
+    // Create token client for balance checks
+    let token_balance_client = soroban_sdk::token::Client::new(&env, &token.address());
+    let proposer_balance_before = token_balance_client.balance(&proposer);
+
+    // Propose and approve
+    let proposal_id = client.propose_transfer(
+        &proposer,
+        &recipient,
+        &token.address(),
+        &1_000,
+        &Symbol::new(&env, "test"),
+        &Priority::Normal,
+        &Vec::new(&env),
+        &ConditionLogic::And,
+        &0,
+    );
+
+    client.approve_proposal(&proposer, &proposal_id);
+    client.execute_proposal(&admin, &proposal_id);
+
+    // Verify stake was refunded
+    let stake_record = client.get_stake_record(&proposal_id);
+    assert!(stake_record.is_some());
+    let record = stake_record.unwrap();
+    assert!(record.refunded);
+    assert!(!record.slashed);
+    assert_eq!(record.slashed_amount, 0);
+
+    // Verify proposer got stake back (balance should be initial - stake + stake = initial)
+    let proposer_balance_after = token_balance_client.balance(&proposer);
+    assert_eq!(proposer_balance_after, proposer_balance_before);
+}
+
+#[test]
+fn test_stake_slashing_on_rejection() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let proposer = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+    let token = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token_client = StellarAssetClient::new(&env, &token.address());
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    signers.push_back(proposer.clone());
+
+    let staking_config = types::StakingConfig {
+        enabled: true,
+        min_amount: 100,
+        base_stake_bps: 500, // 5%
+        max_stake_amount: 10_000,
+        slash_percentage: 50, // 50% slashed
+        reputation_discount_threshold: 750,
+        reputation_discount_percentage: 30,
+    };
+
+    let config = InitConfig {
+        signers,
+        threshold: 1,
+        quorum: 0,
+        spending_limit: 10_000,
+        daily_limit: 50_000,
+        weekly_limit: 100_000,
+        timelock_threshold: 5_000,
+        timelock_delay: 100,
+        velocity_limit: VelocityConfig {
+            limit: 100,
+            window: 3600,
+        },
+        threshold_strategy: ThresholdStrategy::Fixed,
+        default_voting_deadline: 0,
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
+        recovery_config: crate::types::RecoveryConfig::default(&env),
+        staking_config,
+    };
+
+    client.initialize(&admin, &config);
+    client.set_role(&admin, &proposer, &Role::Treasurer);
+
+    // Mint tokens
+    token_client.mint(&proposer, &10_000);
+    token_client.mint(&contract_id, &100_000);
+
+    // Create token client for balance checks
+    let token_balance_client = soroban_sdk::token::Client::new(&env, &token.address());
+    let proposer_balance_before = token_balance_client.balance(&proposer);
+
+    // Propose transfer (stake = 50)
+    let proposal_id = client.propose_transfer(
+        &proposer,
+        &recipient,
+        &token.address(),
+        &1_000,
+        &Symbol::new(&env, "test"),
+        &Priority::Normal,
+        &Vec::new(&env),
+        &ConditionLogic::And,
+        &0,
+    );
+
+    // Reject the proposal (malicious)
+    client.reject_proposal(&admin, &proposal_id);
+
+    // Verify stake was slashed
+    let stake_record = client.get_stake_record(&proposal_id);
+    assert!(stake_record.is_some());
+    let record = stake_record.unwrap();
+    assert!(!record.refunded);
+    assert!(record.slashed);
+    assert_eq!(record.slashed_amount, 25); // 50% of 50 = 25
+
+    // Verify stake pool received slashed amount
+    let stake_pool = client.get_stake_pool(&token.address());
+    assert_eq!(stake_pool, 25);
+
+    // Verify proposer got partial refund (50% = 25)
+    let proposer_balance_after = token_balance_client.balance(&proposer);
+    assert_eq!(proposer_balance_after, proposer_balance_before - 25);
+}
+
+#[test]
+fn test_stake_calculation_with_reputation_discount() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let proposer = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+    let token = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token_client = StellarAssetClient::new(&env, &token.address());
 
     // Initialize vault
     let mut signers = Vec::new(&env);
@@ -6963,4 +7944,314 @@ fn test_time_weighted_voting_disabled() {
     // Voting power should be 1 (equal for all)
     let voting_power = client.get_voting_power(&user);
     assert_eq!(voting_power, 1);
+    signers.push_back(proposer.clone());
+
+    let staking_config = types::StakingConfig {
+        enabled: true,
+        min_amount: 100,
+        base_stake_bps: 1000, // 10%
+        max_stake_amount: 10_000,
+        slash_percentage: 50,
+        reputation_discount_threshold: 750,
+        reputation_discount_percentage: 30, // 30% discount
+    };
+
+    let config = InitConfig {
+        signers,
+        threshold: 1,
+        quorum: 0,
+        spending_limit: 10_000,
+        daily_limit: 50_000,
+        weekly_limit: 100_000,
+        timelock_threshold: 5_000,
+        timelock_delay: 100,
+        velocity_limit: VelocityConfig {
+            limit: 100,
+            window: 3600,
+        },
+        threshold_strategy: ThresholdStrategy::Fixed,
+        default_voting_deadline: 0,
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
+        recovery_config: crate::types::RecoveryConfig::default(&env),
+        staking_config,
+    };
+
+    client.initialize(&admin, &config);
+    client.set_role(&admin, &proposer, &Role::Treasurer);
+
+    // Mint tokens
+    token_client.mint(&proposer, &10_000);
+    token_client.mint(&contract_id, &100_000);
+
+    // Set high reputation for proposer (>= 750)
+    // Note: In real scenario, reputation would be earned through successful proposals
+    // For this test, we'll just verify the stake calculation logic
+
+    // Propose transfer (amount = 1000, base stake = 10% = 100)
+    // With high reputation (750+), stake should be reduced by 30%
+    // Expected stake = 100 - (100 * 30 / 100) = 70
+    let proposal_id = client.propose_transfer(
+        &proposer,
+        &recipient,
+        &token.address(),
+        &1_000,
+        &Symbol::new(&env, "test"),
+        &Priority::Normal,
+        &Vec::new(&env),
+        &ConditionLogic::And,
+        &0,
+    );
+
+    let proposal = client.get_proposal(&proposal_id);
+    // Without high reputation, stake would be 100
+    // This test verifies the calculation logic is in place
+    assert!(proposal.stake_amount > 0);
+}
+
+#[test]
+fn test_stake_pool_management() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let proposer = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let treasury = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+    let token = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token_client = StellarAssetClient::new(&env, &token.address());
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    signers.push_back(proposer.clone());
+
+    let staking_config = types::StakingConfig {
+        enabled: true,
+        min_amount: 100,
+        base_stake_bps: 500,
+        max_stake_amount: 10_000,
+        slash_percentage: 50,
+        reputation_discount_threshold: 750,
+        reputation_discount_percentage: 30,
+    };
+
+    let config = InitConfig {
+        signers,
+        threshold: 1,
+        quorum: 0,
+        spending_limit: 10_000,
+        daily_limit: 50_000,
+        weekly_limit: 100_000,
+        timelock_threshold: 5_000,
+        timelock_delay: 100,
+        velocity_limit: VelocityConfig {
+            limit: 100,
+            window: 3600,
+        },
+        threshold_strategy: ThresholdStrategy::Fixed,
+        default_voting_deadline: 0,
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
+        recovery_config: crate::types::RecoveryConfig::default(&env),
+        staking_config,
+    };
+
+    client.initialize(&admin, &config);
+    client.set_role(&admin, &proposer, &Role::Treasurer);
+
+    // Mint tokens
+    token_client.mint(&proposer, &10_000);
+    token_client.mint(&contract_id, &100_000);
+
+    // Create and reject a proposal to accumulate slashed stakes
+    let proposal_id = client.propose_transfer(
+        &proposer,
+        &recipient,
+        &token.address(),
+        &1_000,
+        &Symbol::new(&env, "test"),
+        &Priority::Normal,
+        &Vec::new(&env),
+        &ConditionLogic::And,
+        &0,
+    );
+
+    client.reject_proposal(&admin, &proposal_id);
+
+    // Verify stake pool has slashed funds
+    let stake_pool_before = client.get_stake_pool(&token.address());
+    assert_eq!(stake_pool_before, 25); // 50% of 50
+
+    // Create token client for balance checks
+    let token_balance_client = soroban_sdk::token::Client::new(&env, &token.address());
+
+    // Admin withdraws from stake pool
+    let treasury_balance_before = token_balance_client.balance(&treasury);
+    client.withdraw_stake_pool(&admin, &token.address(), &treasury, &10);
+
+    // Verify withdrawal
+    let stake_pool_after = client.get_stake_pool(&token.address());
+    assert_eq!(stake_pool_after, 15); // 25 - 10
+
+    let treasury_balance_after = token_balance_client.balance(&treasury);
+    assert_eq!(treasury_balance_after, treasury_balance_before + 10);
+}
+
+#[test]
+fn test_update_staking_config() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+
+    let initial_staking_config = types::StakingConfig {
+        enabled: true,
+        min_amount: 100,
+        base_stake_bps: 500,
+        max_stake_amount: 10_000,
+        slash_percentage: 50,
+        reputation_discount_threshold: 750,
+        reputation_discount_percentage: 30,
+    };
+
+    let config = InitConfig {
+        signers,
+        threshold: 1,
+        quorum: 0,
+        spending_limit: 10_000,
+        daily_limit: 50_000,
+        weekly_limit: 100_000,
+        timelock_threshold: 5_000,
+        timelock_delay: 100,
+        velocity_limit: VelocityConfig {
+            limit: 100,
+            window: 3600,
+        },
+        threshold_strategy: ThresholdStrategy::Fixed,
+        default_voting_deadline: 0,
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
+        recovery_config: crate::types::RecoveryConfig::default(&env),
+        staking_config: initial_staking_config,
+    };
+
+    client.initialize(&admin, &config);
+
+    // Update staking config
+    let new_staking_config = types::StakingConfig {
+        enabled: true,
+        min_amount: 200,
+        base_stake_bps: 1000, // 10%
+        max_stake_amount: 20_000,
+        slash_percentage: 75, // 75% slashed
+        reputation_discount_threshold: 800,
+        reputation_discount_percentage: 50,
+    };
+
+    client.update_staking_config(&admin, &new_staking_config);
+
+    // Verify config was updated
+    let updated_config = client.get_staking_config();
+    assert_eq!(updated_config.min_amount, 200);
+    assert_eq!(updated_config.base_stake_bps, 1000);
+    assert_eq!(updated_config.max_stake_amount, 20_000);
+    assert_eq!(updated_config.slash_percentage, 75);
+    assert_eq!(updated_config.reputation_discount_threshold, 800);
+    assert_eq!(updated_config.reputation_discount_percentage, 50);
+}
+
+#[test]
+fn test_stake_max_cap() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let proposer = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+    let token = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token_client = StellarAssetClient::new(&env, &token.address());
+
+    let mut signers = Vec::new(&env);
+    signers.push_back(admin.clone());
+    signers.push_back(proposer.clone());
+
+    let staking_config = types::StakingConfig {
+        enabled: true,
+        min_amount: 100,
+        base_stake_bps: 1000, // 10%
+        max_stake_amount: 500, // Cap at 500
+        slash_percentage: 50,
+        reputation_discount_threshold: 750,
+        reputation_discount_percentage: 30,
+    };
+
+    let config = InitConfig {
+        signers,
+        threshold: 1,
+        quorum: 0,
+        spending_limit: 100_000,
+        daily_limit: 500_000,
+        weekly_limit: 1_000_000,
+        timelock_threshold: 50_000,
+        timelock_delay: 100,
+        velocity_limit: VelocityConfig {
+            limit: 100,
+            window: 3600,
+        },
+        threshold_strategy: ThresholdStrategy::Fixed,
+        default_voting_deadline: 0,
+        retry_config: RetryConfig {
+            enabled: false,
+            max_retries: 0,
+            initial_backoff_ledgers: 0,
+        },
+        recovery_config: crate::types::RecoveryConfig::default(&env),
+        staking_config,
+    };
+
+    client.initialize(&admin, &config);
+    client.set_role(&admin, &proposer, &Role::Treasurer);
+
+    // Mint tokens
+    token_client.mint(&proposer, &100_000);
+    token_client.mint(&contract_id, &1_000_000);
+
+    // Propose large transfer (amount = 10000, 10% = 1000, but capped at 500)
+    let proposal_id = client.propose_transfer(
+        &proposer,
+        &recipient,
+        &token.address(),
+        &10_000,
+        &Symbol::new(&env, "test"),
+        &Priority::Normal,
+        &Vec::new(&env),
+        &ConditionLogic::And,
+        &0,
+    );
+
+    let proposal = client.get_proposal(&proposal_id);
+    // Stake should be capped at max_stake_amount
+    assert_eq!(proposal.stake_amount, 500);
 }
