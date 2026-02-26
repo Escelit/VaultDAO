@@ -2686,7 +2686,7 @@ impl VaultDAO {
 
         events::emit_batch_executed(&env, &executor, executed.len(), failed_count);
 
-        Ok(executed)
+        Ok((executed, failed_count))
     }
 
     // ========================================================================
