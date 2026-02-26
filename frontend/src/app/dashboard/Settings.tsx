@@ -23,6 +23,7 @@ import RoleManagement from '../../components/RoleManagement';
 import EmergencyControls from '../../components/EmergencyControls';
 import WalletComparison from '../../components/WalletComparison';
 import CopyButton from '../../components/CopyButton';
+import SpendingLimitsPanel from '../../components/SpendingLimitsPanel';
 import { useVaultContract } from '../../hooks/useVaultContract';
 import { useWallet } from '../../hooks/useWallet';
 import { formatTokenAmount, truncateAddress } from '../../utils/formatters';
@@ -377,11 +378,7 @@ const Settings: React.FC = () => {
         {showRecipientLists && <RecipientListManagement />}
       </div>
 
-      <div className="bg-gray-800 rounded-xl border border-gray-700 p-6">
-        <p className="text-gray-400">
-          Configuration editing is not enabled yet. Admin updates will be added in a future release.
-        </p>
-      </div>
+      <SpendingLimitsPanel isAdmin={isAdmin} />
     </div>
   );
 };
