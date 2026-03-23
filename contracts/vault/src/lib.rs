@@ -1514,6 +1514,54 @@ impl VaultDAO {
         storage::get_config(&env)
     }
 
+    /// Assign a role to an address.
+    ///
+    /// Only an account with the `Admin` role can call this function.
+    /// Roles control what operations an address is permitted to perform:
+    /// - [`Role::Member`]    — read-only access (default)
+    /// - [`Role::Treasurer`] — can propose and approve transfers
+    /// - [`Role::Admin`]     — full operational control
+    ///
+    /// # Arguments
+    /// * `admin`   - The caller; must hold the `Admin` role and authorize.
+    /// * `target`  - The address whose role is being set.
+    /// * `role`    - The new [`Role`] to assign.
+    ///
+    /// # Errors
+    /// - [`VaultError::NotInitialized`] if the vault has not been initialized.
+    /// - [`VaultError::Unauthorized`]   if the caller is not an Admin.
+    pub fn set_role(
+        env: Env,
+        admin: Address,
+        target: Address,
+        role: Role,
+    ) -> Result<(), VaultError> {
+        // Require explicit authorization from the caller
+        admin.require_auth();
+
+        // Vault must be initialized
+        if !storage::is_initialized(&env) {
+            return Err(VaultError::NotInitialized);
+        }
+
+        // Only Admin may assign roles
+        if storage::get_role(&env, &admin) != Role::Admin {
+            return Err(VaultError::Unauthorized);
+        }
+
+        // Persist the new role
+        storage::set_role(&env, &target, role.clone());
+        storage::extend_instance_ttl(&env);
+
+        // Emit role-assignment event
+        events::emit_role_assigned(&env, &target, role as u32);
+
+        // Append to the tamper-evident audit trail
+        storage::create_audit_entry(&env, AuditAction::SetRole, &admin, 0);
+
+        Ok(())
+    }
+
     /// Get role for an address
     pub fn get_role(env: Env, addr: Address) -> Role {
         storage::get_role(&env, &addr)

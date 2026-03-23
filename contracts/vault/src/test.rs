@@ -7451,3 +7451,109 @@ fn test_get_config_reflects_updates() {
     assert_eq!(config_after.spending_limit, config_before.spending_limit);
     assert_eq!(config_after.daily_limit, config_before.daily_limit);
 }
+
+// ============================================================================
+// set_role tests (feature/public-set-role-endpoint)
+// ============================================================================
+
+/// Admin can assign Treasurer role to another address.
+#[test]
+fn test_set_role_admin_success() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let signer1 = Address::generate(&env);
+    let user = Address::generate(&env);
+
+    let mut signers = soroban_sdk::Vec::new(&env);
+    signers.push_back(admin.clone());
+    signers.push_back(signer1.clone());
+
+    client.initialize(&admin, &default_init_config(&env, signers, 1));
+
+    // user starts as Member (default)
+    assert_eq!(client.get_role(&user), Role::Member);
+
+    // Admin assigns Treasurer
+    client.set_role(&admin, &user, &Role::Treasurer);
+    assert_eq!(client.get_role(&user), Role::Treasurer);
+}
+
+/// Non-admin cannot assign roles.
+#[test]
+fn test_set_role_non_admin_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let signer1 = Address::generate(&env);
+    let user = Address::generate(&env);
+
+    let mut signers = soroban_sdk::Vec::new(&env);
+    signers.push_back(admin.clone());
+    signers.push_back(signer1.clone());
+
+    client.initialize(&admin, &default_init_config(&env, signers, 1));
+
+    // signer1 is a Member — cannot assign roles
+    let result = client.try_set_role(&signer1, &user, &Role::Treasurer);
+    assert_eq!(result, Err(Ok(VaultError::Unauthorized)));
+
+    // role must remain unchanged
+    assert_eq!(client.get_role(&user), Role::Member);
+}
+
+/// Admin can overwrite an existing role.
+#[test]
+fn test_set_role_overwrite() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let signer1 = Address::generate(&env);
+    let user = Address::generate(&env);
+
+    let mut signers = soroban_sdk::Vec::new(&env);
+    signers.push_back(admin.clone());
+    signers.push_back(signer1.clone());
+
+    client.initialize(&admin, &default_init_config(&env, signers, 1));
+
+    // Assign Treasurer first
+    client.set_role(&admin, &user, &Role::Treasurer);
+    assert_eq!(client.get_role(&user), Role::Treasurer);
+
+    // Overwrite with Admin
+    client.set_role(&admin, &user, &Role::Admin);
+    assert_eq!(client.get_role(&user), Role::Admin);
+
+    // Downgrade back to Member
+    client.set_role(&admin, &user, &Role::Member);
+    assert_eq!(client.get_role(&user), Role::Member);
+}
+
+/// set_role fails before the vault is initialized.
+#[test]
+fn test_set_role_not_initialized() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+
+    let result = client.try_set_role(&admin, &user, &Role::Treasurer);
+    assert_eq!(result, Err(Ok(VaultError::NotInitialized)));
+}
