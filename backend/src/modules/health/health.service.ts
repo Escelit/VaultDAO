@@ -1,5 +1,25 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import type { BackendEnv } from "../../config/env.js";
 import type { BackendRuntime } from "../../server.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = join(__filename, "..");
+
+const getPackageMetadata = () => {
+  try {
+    const packageJsonPath = join(__dirname, "../../../package.json");
+    const packageJsonContent = readFileSync(packageJsonPath, "utf8");
+    return JSON.parse(packageJsonContent);
+  } catch (_error) {
+    return { version: "unknown" };
+  }
+};
+
+const packageMetadata = getPackageMetadata();
+const VERSION = packageMetadata.version;
 
 export type DependencyStatus = "ready" | "not_ready";
 
@@ -15,6 +35,9 @@ export interface DependencyReadiness {
 export interface ReadinessPayload {
   readonly ready: boolean;
   readonly service: string;
+  readonly version: string;
+  readonly build?: { channel: string; updatedAt: string };
+  readonly environment: string;
   readonly timestamp: string;
   readonly uptimeSeconds: number;
   readonly checks: {
@@ -29,6 +52,9 @@ export function buildHealthPayload(env: BackendEnv) {
   return {
     ok: true,
     service: "vaultdao-backend",
+    version: VERSION,
+    build: packageMetadata.build,
+    environment: env.nodeEnv,
     network: env.stellarNetwork,
     contractId: env.contractId,
     timestamp: new Date().toISOString(),
@@ -38,10 +64,13 @@ export function buildHealthPayload(env: BackendEnv) {
 export function buildStatusPayload(env: BackendEnv) {
   return {
     service: "vaultdao-backend",
+    version: VERSION,
+    build: packageMetadata.build,
     environment: env.nodeEnv,
     rpcUrl: env.sorobanRpcUrl,
     horizonUrl: env.horizonUrl,
     websocketUrl: env.websocketUrl,
+    timestamp: new Date().toISOString(),
   };
 }
 
@@ -109,6 +138,9 @@ export function buildReadinessPayload(
   return {
     ready: requiredChecks,
     service: "vaultdao-backend",
+    version: VERSION,
+    build: packageMetadata.build,
+    environment: env.nodeEnv,
     timestamp: new Date().toISOString(),
     uptimeSeconds: getUptimeSeconds(runtime.startedAt),
     checks,

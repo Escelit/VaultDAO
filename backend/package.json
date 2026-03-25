@@ -1,8 +1,13 @@
 {
   "name": "@vaultdao/backend",
-  "private": true,
   "version": "0.1.0",
+  "description": "VaultDAO backend service exposing version and build metadata",
+  "private": true,
   "type": "module",
+  "build": {
+    "channel": "stable",
+    "updatedAt": "2026-03-25T13:35:46Z"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "rm -rf dist && tsc -p tsconfig.json",
