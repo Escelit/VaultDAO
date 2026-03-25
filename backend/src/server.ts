@@ -1,15 +1,22 @@
 import type { BackendEnv } from "./config/env.js";
-import { createApp } from "./app.js";
 import { loadEnv } from "./config/env.js";
+import { createApp } from "./app.js";
+import { EventPollingService } from "./modules/events/index.js";
 
 export interface BackendRuntime {
   readonly startedAt: string;
+  readonly eventPollingService: EventPollingService;
 }
 
 export function startServer(env: BackendEnv = loadEnv()) {
   const runtime: BackendRuntime = {
     startedAt: new Date().toISOString(),
+    eventPollingService: new EventPollingService(env),
   };
+  
+  // Start background services
+  void runtime.eventPollingService.start();
+
   const app = createApp(env, runtime);
 
   const server = app.listen(env.port, env.host, () => {

@@ -7,6 +7,8 @@ export interface BackendEnv {
   readonly horizonUrl: string;
   readonly contractId: string;
   readonly websocketUrl: string;
+  readonly eventPollingIntervalMs: number;
+  readonly eventPollingEnabled: boolean;
 }
 
 const DEFAULT_CONTRACT_ID =
@@ -123,6 +125,8 @@ export function loadEnv(): BackendEnv {
   );
   const contractId = readString("CONTRACT_ID", DEFAULT_CONTRACT_ID);
   const websocketUrl = readString("VITE_WS_URL", "ws://localhost:8080");
+  const eventPollingIntervalMs = readPort("EVENT_POLLING_INTERVAL_MS", 10000, issues);
+  const eventPollingEnabled = readString("EVENT_POLLING_ENABLED", "true") === "true";
 
   validateRequiredString("HOST", host, issues);
   validateAllowedValue("NODE_ENV", nodeEnv, ALLOWED_NODE_ENVS, issues);
@@ -148,5 +152,7 @@ export function loadEnv(): BackendEnv {
     horizonUrl,
     contractId,
     websocketUrl,
+    eventPollingIntervalMs,
+    eventPollingEnabled,
   };
 }

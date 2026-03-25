@@ -11,9 +11,9 @@ import {
 export function createHealthRouter(env: BackendEnv, runtime: BackendRuntime) {
   const router = Router();
 
-  router.get("/health", getHealthController(env));
+  router.get("/health", getHealthController(env, runtime));
   router.get("/ready", getReadinessController(env, runtime));
-  router.get("/api/v1/status", getStatusController(env));
+  router.get("/api/v1/status", getStatusController(env, runtime));
 
   return router;
 }
