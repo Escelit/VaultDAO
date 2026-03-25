@@ -60,6 +60,18 @@ const MAX_CROSS_VAULT_ACTIONS: u32 = 5;
 /// Maximum length for a single metadata value
 const MAX_METADATA_VALUE_LEN: u32 = 256;
 
+/// Maximum number of tags per proposal
+const MAX_TAGS: u32 = 10;
+
+/// Maximum number of attachments per proposal
+const MAX_ATTACHMENTS: u32 = 10;
+
+/// Minimum length for an attachment CID (CIDv0 = 46 chars, CIDv1 base32 = 59+ chars)
+const MIN_ATTACHMENT_LEN: u32 = 46;
+
+/// Maximum length for an attachment CID
+const MAX_ATTACHMENT_LEN: u32 = 128;
+
 /// Reputation adjustments
 const REP_EXEC_PROPOSER: u32 = 10;
 const REP_EXEC_APPROVER: u32 = 5;
@@ -2518,12 +2530,17 @@ impl VaultDAO {
             return Err(VaultError::Unauthorized);
         }
 
-        // IPFS CID v0 is 46 chars; reject obviously invalid hashes
-        if attachment.len() < 10 {
-            return Err(VaultError::InvalidAmount);
+        // IPFS CID v0 is 46 chars; CIDv1 base32 is 59+ chars; reject anything
+        // outside the valid range with a dedicated error code.
+        let alen = attachment.len();
+        if alen < MIN_ATTACHMENT_LEN || alen > MAX_ATTACHMENT_LEN {
+            return Err(VaultError::AttachmentHashInvalid);
         }
 
         let mut attachments = storage::get_attachments(&env, proposal_id);
+        if attachments.len() >= MAX_ATTACHMENTS {
+            return Err(VaultError::TooManyAttachments);
+        }
         if attachments.contains(attachment.clone()) {
             return Err(VaultError::AlreadyApproved); // duplicate attachment
         }
@@ -2587,7 +2604,7 @@ impl VaultDAO {
         // Metadata validation: non-empty bounded value and bounded entry count.
         let value_len = value.len();
         if value_len == 0 || value_len > MAX_METADATA_VALUE_LEN {
-            return Err(VaultError::InvalidAmount);
+            return Err(VaultError::MetadataValueInvalid);
         }
 
         let exists = proposal.metadata.get(key.clone()).is_some();
@@ -2670,6 +2687,10 @@ impl VaultDAO {
 
         if proposal.tags.contains(&tag) {
             return Err(VaultError::AlreadyApproved); // duplicate tag
+        }
+
+        if proposal.tags.len() >= MAX_TAGS {
+            return Err(VaultError::TooManyTags);
         }
 
         proposal.tags.push_back(tag);

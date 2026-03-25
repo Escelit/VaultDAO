@@ -9579,3 +9579,244 @@ fn test_recurring_execute_succeeds_after_removing_from_blacklist() {
         "Expected execution to succeed after removing recipient from blacklist"
     );
 }
+
+// ============================================================================
+// Stronger Input Validation — Metadata, Tags, Attachments (#291)
+// ============================================================================
+
+/// Helper: create a proposal and return its ID.
+fn make_proposal(client: &VaultDAOClient, proposer: &Address, recipient: &Address, token: &Address, env: &Env) -> u64 {
+    client.propose_transfer(
+        proposer,
+        recipient,
+        token,
+        &100i128,
+        &Symbol::new(env, "memo"),
+        &Priority::Normal,
+        &soroban_sdk::Vec::new(env),
+        &ConditionLogic::And,
+        &0i128,
+    )
+}
+
+// --- Attachment validation ---
+
+/// A valid CIDv0 hash (46 chars) is accepted.
+#[test]
+fn test_attachment_valid_cidv0_accepted() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let token = env.register_stellar_asset_contract_v2(admin.clone()).address();
+    soroban_sdk::token::StellarAssetClient::new(&env, &token).mint(&contract_id, &1000);
+    let mut signers = soroban_sdk::Vec::new(&env);
+    signers.push_back(admin.clone());
+    client.initialize(&admin, &default_init_config(&env, signers, 1));
+    let pid = make_proposal(&client, &admin, &recipient, &token, &env);
+    // CIDv0 is exactly 46 chars starting with "Qm"
+    let cid = String::from_str(&env, "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG");
+    let res = client.try_add_attachment(&admin, &pid, &cid);
+    assert!(res.is_ok(), "Valid CIDv0 should be accepted");
+}
+
+/// A hash shorter than 46 chars is rejected with AttachmentHashInvalid.
+#[test]
+fn test_attachment_too_short_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let token = env.register_stellar_asset_contract_v2(admin.clone()).address();
+    soroban_sdk::token::StellarAssetClient::new(&env, &token).mint(&contract_id, &1000);
+    let mut signers = soroban_sdk::Vec::new(&env);
+    signers.push_back(admin.clone());
+    client.initialize(&admin, &default_init_config(&env, signers, 1));
+    let pid = make_proposal(&client, &admin, &recipient, &token, &env);
+    let short = String::from_str(&env, "tooshort");
+    let res = client.try_add_attachment(&admin, &pid, &short);
+    assert_eq!(res.err(), Some(Ok(VaultError::AttachmentHashInvalid)));
+}
+
+/// A hash longer than 128 chars is rejected with AttachmentHashInvalid.
+#[test]
+fn test_attachment_too_long_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let token = env.register_stellar_asset_contract_v2(admin.clone()).address();
+    soroban_sdk::token::StellarAssetClient::new(&env, &token).mint(&contract_id, &1000);
+    let mut signers = soroban_sdk::Vec::new(&env);
+    signers.push_back(admin.clone());
+    client.initialize(&admin, &default_init_config(&env, signers, 1));
+    let pid = make_proposal(&client, &admin, &recipient, &token, &env);
+    // 129 chars
+    let long = String::from_str(&env, "Qmaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    let res = client.try_add_attachment(&admin, &pid, &long);
+    assert_eq!(res.err(), Some(Ok(VaultError::AttachmentHashInvalid)));
+}
+
+/// Adding more than MAX_ATTACHMENTS (10) attachments is rejected with TooManyAttachments.
+#[test]
+fn test_attachment_max_count_enforced() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let token = env.register_stellar_asset_contract_v2(admin.clone()).address();
+    soroban_sdk::token::StellarAssetClient::new(&env, &token).mint(&contract_id, &1000);
+    let mut signers = soroban_sdk::Vec::new(&env);
+    signers.push_back(admin.clone());
+    client.initialize(&admin, &default_init_config(&env, signers, 1));
+    let pid = make_proposal(&client, &admin, &recipient, &token, &env);
+
+    // CIDv0 hashes — each unique, exactly 46 chars
+    let cids = [
+        "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG",
+        "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdH",
+        "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdI",
+        "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdJ",
+        "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdK",
+        "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdL",
+        "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdM",
+        "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdN",
+        "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdO",
+        "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdP",
+    ];
+    for cid in &cids {
+        client.add_attachment(&admin, &pid, &String::from_str(&env, cid));
+    }
+
+    // 11th attachment must be rejected
+    let extra = String::from_str(&env, "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdQ");
+    let res = client.try_add_attachment(&admin, &pid, &extra);
+    assert_eq!(res.err(), Some(Ok(VaultError::TooManyAttachments)));
+}
+
+// --- Tag validation ---
+
+/// Adding more than MAX_TAGS (10) tags is rejected with TooManyTags.
+#[test]
+fn test_tag_max_count_enforced() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let token = env.register_stellar_asset_contract_v2(admin.clone()).address();
+    soroban_sdk::token::StellarAssetClient::new(&env, &token).mint(&contract_id, &1000);
+    let mut signers = soroban_sdk::Vec::new(&env);
+    signers.push_back(admin.clone());
+    client.initialize(&admin, &default_init_config(&env, signers, 1));
+    let pid = make_proposal(&client, &admin, &recipient, &token, &env);
+
+    let tag_names = ["t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9", "t10"];
+    for name in &tag_names {
+        client.add_proposal_tag(&admin, &pid, &Symbol::new(&env, name));
+    }
+
+    // 11th tag must be rejected
+    let res = client.try_add_proposal_tag(&admin, &pid, &Symbol::new(&env, "t11"));
+    assert_eq!(res.err(), Some(Ok(VaultError::TooManyTags)));
+}
+
+/// Adding up to MAX_TAGS tags succeeds.
+#[test]
+fn test_tag_up_to_max_succeeds() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let token = env.register_stellar_asset_contract_v2(admin.clone()).address();
+    soroban_sdk::token::StellarAssetClient::new(&env, &token).mint(&contract_id, &1000);
+    let mut signers = soroban_sdk::Vec::new(&env);
+    signers.push_back(admin.clone());
+    client.initialize(&admin, &default_init_config(&env, signers, 1));
+    let pid = make_proposal(&client, &admin, &recipient, &token, &env);
+
+    let tag_names = ["t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9", "t10"];
+    for name in &tag_names {
+        let res = client.try_add_proposal_tag(&admin, &pid, &Symbol::new(&env, name));
+        assert!(res.is_ok(), "Adding tag {} should succeed", name);
+    }
+    assert_eq!(client.get_proposal_tags(&pid).unwrap().len(), 10);
+}
+
+// --- Metadata validation ---
+
+/// An empty metadata value is rejected with MetadataValueInvalid.
+#[test]
+fn test_metadata_empty_value_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let token = env.register_stellar_asset_contract_v2(admin.clone()).address();
+    soroban_sdk::token::StellarAssetClient::new(&env, &token).mint(&contract_id, &1000);
+    let mut signers = soroban_sdk::Vec::new(&env);
+    signers.push_back(admin.clone());
+    client.initialize(&admin, &default_init_config(&env, signers, 1));
+    let pid = make_proposal(&client, &admin, &recipient, &token, &env);
+    let res = client.try_set_proposal_metadata(
+        &admin, &pid, &Symbol::new(&env, "key"), &String::from_str(&env, ""),
+    );
+    assert_eq!(res.err(), Some(Ok(VaultError::MetadataValueInvalid)));
+}
+
+/// A metadata value exceeding 256 chars is rejected with MetadataValueInvalid.
+#[test]
+fn test_metadata_value_too_long_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let token = env.register_stellar_asset_contract_v2(admin.clone()).address();
+    soroban_sdk::token::StellarAssetClient::new(&env, &token).mint(&contract_id, &1000);
+    let mut signers = soroban_sdk::Vec::new(&env);
+    signers.push_back(admin.clone());
+    client.initialize(&admin, &default_init_config(&env, signers, 1));
+    let pid = make_proposal(&client, &admin, &recipient, &token, &env);
+    // 257 'a' characters
+    let long_val = String::from_str(&env, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    let res = client.try_set_proposal_metadata(
+        &admin, &pid, &Symbol::new(&env, "key"), &long_val,
+    );
+    assert_eq!(res.err(), Some(Ok(VaultError::MetadataValueInvalid)));
+}
+
+/// A valid metadata value (1–256 chars) is accepted.
+#[test]
+fn test_metadata_valid_value_accepted() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(VaultDAO, ());
+    let client = VaultDAOClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let token = env.register_stellar_asset_contract_v2(admin.clone()).address();
+    soroban_sdk::token::StellarAssetClient::new(&env, &token).mint(&contract_id, &1000);
+    let mut signers = soroban_sdk::Vec::new(&env);
+    signers.push_back(admin.clone());
+    client.initialize(&admin, &default_init_config(&env, signers, 1));
+    let pid = make_proposal(&client, &admin, &recipient, &token, &env);
+    let res = client.try_set_proposal_metadata(
+        &admin, &pid, &Symbol::new(&env, "key"), &String::from_str(&env, "valid"),
+    );
+    assert!(res.is_ok(), "Valid metadata value should be accepted");
+}

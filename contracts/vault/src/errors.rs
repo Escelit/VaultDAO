@@ -55,6 +55,14 @@ pub enum VaultError {
     TemplateInactive = 211,
     TemplateValidationFailed = 212,
     FundingRoundError = 220,
+    /// Attachment hash is too short or too long to be a valid CID
+    AttachmentHashInvalid = 230,
+    /// Proposal has reached the maximum number of attachments
+    TooManyAttachments = 231,
+    /// Proposal has reached the maximum number of tags
+    TooManyTags = 232,
+    /// Metadata value is empty or exceeds the maximum allowed length
+    MetadataValueInvalid = 233,
 }
 
 // Compatibility markers for CI source checks:
