@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { ArrowUpRight, Clock, SearchX, Check, Loader2, GitCompare, FileText, Plus } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import type { NewProposalFormData } from '../../components/modals/NewProposalModal';
 import NewProposalModal from '../../components/modals/NewProposalModal';
 import ProposalDetailModal from '../../components/modals/ProposalDetailModal';
@@ -12,6 +13,7 @@ import { useToast } from '../../hooks/useToast';
 import { useVaultContract } from '../../hooks/useVaultContract';
 import { useProposals } from '../../hooks/useProposals';
 import { useWallet } from '../../hooks/useWallet';
+import { filtersToSearchParams, searchParamsToFilters } from '../../utils/search';
 import { useActionReadiness } from '../../hooks/useActionReadiness';
 import { useRealtime } from '../../contexts/RealtimeContext';
 import type { TokenInfo, TokenBalance } from '../../types';
@@ -81,13 +83,41 @@ const Proposals: React.FC = () => {
   const [showComparison, setShowComparison] = useState(false);
   const [selectedForComparison, setSelectedForComparison] = useState<Set<string>>(new Set());
 
-  const [activeFilters, setActiveFilters] = useState<FilterState>({
-    search: '',
-    statuses: [],
-    dateRange: { from: '', to: '' },
-    amountRange: { min: '', max: '' },
-    sortBy: 'newest'
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const [activeFilters, setActiveFilters] = useState<FilterState>(() => {
+    const defaults: FilterState = {
+      search: '',
+      statuses: [],
+      dateRange: { from: '', to: '' },
+      amountRange: { min: '', max: '' },
+      sortBy: 'newest'
+    };
+    return searchParamsToFilters(searchParams, defaults);
   });
+
+  // Sync state to URL
+  useEffect(() => {
+    const params = filtersToSearchParams(activeFilters);
+    if (params.toString() !== searchParams.toString()) {
+      setSearchParams(params, { replace: true });
+    }
+  }, [activeFilters, searchParams, setSearchParams]);
+
+  // Sync URL to state (for back/forward navigation)
+  useEffect(() => {
+    const defaults: FilterState = {
+      search: '',
+      statuses: [],
+      dateRange: { from: '', to: '' },
+      amountRange: { min: '', max: '' },
+      sortBy: 'newest'
+    };
+    const newFilters = searchParamsToFilters(searchParams, defaults);
+    if (JSON.stringify(newFilters) !== JSON.stringify(activeFilters)) {
+      setActiveFilters(newFilters);
+    }
+  }, [searchParams]);
 
   const [newProposalForm, setNewProposalForm] = useState<NewProposalFormData>({
     recipient: '',

@@ -1,5 +1,6 @@
 import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import Proposals from '../Proposals';
 import { makeVaultContractMock, makeWalletMock, makeRealtimeMock, makeActionReadinessMock, makeProposal } from '../../../test/mocks';
@@ -61,7 +62,11 @@ describe('Proposals page', () => {
       filterByStatus: vi.fn().mockReturnValue([]),
     });
 
-    render(<Proposals />);
+    render(
+      <MemoryRouter>
+        <Proposals />
+      </MemoryRouter>
+    );
     expect(document.querySelector('.animate-spin')).toBeTruthy();
   });
 
@@ -74,7 +79,11 @@ describe('Proposals page', () => {
       filterByStatus: vi.fn().mockReturnValue([]),
     });
 
-    render(<Proposals />);
+    render(
+      <MemoryRouter>
+        <Proposals />
+      </MemoryRouter>
+    );
 
     await waitFor(() => {
       expect(screen.getByTestId('proposal-filters')).toBeInTheDocument();
@@ -97,7 +106,11 @@ describe('Proposals page', () => {
       filterByStatus: vi.fn().mockReturnValue(proposals),
     });
 
-    render(<Proposals />);
+    render(
+      <MemoryRouter>
+        <Proposals />
+      </MemoryRouter>
+    );
 
     await waitFor(() => {
       expect(screen.getByText('Pay vendor')).toBeInTheDocument();
@@ -114,7 +127,11 @@ describe('Proposals page', () => {
       filterByStatus: vi.fn().mockReturnValue([]),
     });
 
-    render(<Proposals />);
+    render(
+      <MemoryRouter>
+        <Proposals />
+      </MemoryRouter>
+    );
 
     await waitFor(() => {
       expect(screen.getByText(/Failed to load proposals/i)).toBeInTheDocument();
@@ -131,7 +148,11 @@ describe('Proposals page', () => {
       filterByStatus: vi.fn().mockReturnValue([]),
     });
 
-    render(<Proposals />);
+    render(
+      <MemoryRouter>
+        <Proposals />
+      </MemoryRouter>
+    );
 
     await waitFor(() => {
       const retryBtn = screen.getByRole('button', { name: /retry/i });
@@ -153,7 +174,11 @@ describe('Proposals page', () => {
       filterByStatus: vi.fn().mockReturnValue([]),
     });
 
-    render(<Proposals />);
+    render(
+      <MemoryRouter>
+        <Proposals />
+      </MemoryRouter>
+    );
 
     await waitFor(() => {
       // The component renders a red banner for 'error' connectionStatus
@@ -170,7 +195,11 @@ describe('Proposals page', () => {
       filterByStatus: vi.fn().mockReturnValue([]),
     });
 
-    render(<Proposals />);
+    render(
+      <MemoryRouter>
+        <Proposals />
+      </MemoryRouter>
+    );
 
     const newBtn = await screen.findByRole('button', { name: /new proposal/i });
     fireEvent.click(newBtn);
