@@ -10,9 +10,9 @@
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "rm -rf dist && tsc -p tsconfig.json",
+    "build": "node -e \"import('fs').then(fs => fs.existsSync('dist') && fs.rmSync('dist', { recursive: true, force: true }))\" && tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && find dist -name '*.test.js' -type f -print0 | xargs -0 node --test",
+    "test": "npm run build && node --test dist/app.test.js dist/server.test.js dist/modules/**/*.test.js dist/shared/**/*.test.js",
     "lint": "npm run typecheck",
     "start": "node dist/index.js",
     "replay": "tsx src/modules/events/replay/replay-cli.ts"
