@@ -19,6 +19,7 @@ import {
 } from "./modules/proposals/index.js";
 import { JobManager } from "./modules/jobs/job.manager.js";
 import { createLogger } from "./shared/logging/logger.js";
+import type { Server } from "node:http";
 
 export interface BackendRuntime {
   readonly startedAt: string;
@@ -29,7 +30,12 @@ export interface BackendRuntime {
   readonly jobManager: JobManager;
 }
 
-export function startServer(env: BackendEnv = loadEnv()) {
+export interface BackendServer {
+  readonly server: Server;
+  readonly runtime: BackendRuntime;
+}
+
+export function startServer(env: BackendEnv = loadEnv()): BackendServer {
   const jobManager = new JobManager();
 
   // Initialize proposal activity components
@@ -91,5 +97,5 @@ export function startServer(env: BackendEnv = loadEnv()) {
     );
   });
 
-  return server;
+  return { server, runtime };
 }

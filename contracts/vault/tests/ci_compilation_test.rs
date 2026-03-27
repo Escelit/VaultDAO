@@ -31,13 +31,14 @@ fn test_ci_compilation_succeeds() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    let combined_output = format!("{stdout}\n{stderr}");
+    let combined_output = format!("{}\n{}", stdout, stderr);
 
     // Check for compilation success
     assert!(
         output.status.success(),
-        "Compilation failed with exit code: {:?}\n\nOutput:\n{combined_output}",
+        "Compilation failed with exit code: {:?}\n\nOutput:\n{}",
         output.status.code(),
+        combined_output
     );
 
     // Verify no "cannot find type" errors for delegation types

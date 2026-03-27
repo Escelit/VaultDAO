@@ -124,12 +124,12 @@ fn test_existing_functionality_preserved() {
 
     for module in modules {
         let path = src_dir.join(module);
-        assert!(path.exists(), "Module {module} should exist");
+        assert!(path.exists(), "Module {} should exist", module);
 
-        let content =
-            fs::read_to_string(&path).unwrap_or_else(|_| panic!("Should be able to read {module}"));
+        let content = fs::read_to_string(&path)
+            .unwrap_or_else(|_| panic!("Should be able to read {}", module));
 
-        assert!(!content.is_empty(), "Module {module} should not be empty");
+        assert!(!content.is_empty(), "Module {} should not be empty", module);
     }
 }
 
@@ -227,6 +227,7 @@ fn test_wasm_target_compilation() {
 
     assert!(
         wasm_path.exists(),
-        "WASM file should be generated at {wasm_path:?}",
+        "WASM file should be generated at {:?}",
+        wasm_path
     );
 }

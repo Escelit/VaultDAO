@@ -4590,7 +4590,8 @@ fn test_retry_execution_function() {
     let result = client.try_execute_proposal(&admin, &proposal_id);
     assert!(
         result.is_ok(),
-        "Second retry should be scheduled, got: {result:?}",
+        "Second retry should be scheduled, got: {:?}",
+        result
     );
 
     let state = client.get_retry_state(&proposal_id).unwrap();
@@ -9933,7 +9934,7 @@ fn test_tag_up_to_max_succeeds() {
     let tag_names = ["t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9", "t10"];
     for name in &tag_names {
         let res = client.try_add_proposal_tag(&admin, &pid, &Symbol::new(&env, name));
-        assert!(res.is_ok(), "Adding tag {name} should succeed");
+        assert!(res.is_ok(), "Adding tag {} should succeed", name);
     }
     assert_eq!(client.get_proposal_tags(&pid).len(), 10);
 }
