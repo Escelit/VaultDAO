@@ -19,10 +19,6 @@ import {
 } from "./modules/proposals/index.js";
 import { EventWebSocketServer } from "./modules/websocket/websocket.server.js";
 import { JobManager } from "./modules/jobs/job.manager.js";
-import {
-  DuePaymentsJob,
-  CursorCleanupJob,
-} from "./modules/jobs/index.js";
 import type { NotificationQueue } from "./modules/notifications/notification.types.js";
 import { createLogger } from "./shared/logging/logger.js";
 import type { Server } from "node:http";

@@ -8,6 +8,7 @@ import { createRecurringRouter } from "./modules/recurring/recurring.routes.js";
 import { error } from "./shared/http/response.js";
 import { createRateLimitMiddleware } from "./shared/http/rateLimit.js";
 import { createAuthMiddleware } from "./shared/http/auth.js";
+import { ErrorCode } from "./shared/http/errorCodes.js";
 import {
   REQUEST_ID_HEADER,
   generateRequestId,
@@ -112,8 +113,8 @@ export function createApp(env: BackendEnv, runtime: BackendRuntime) {
 
   app.use("/api/v1", v1Router);
 
-  app.use((_request: Request, response: Response) => {
-    error(response as any, { message: "Not Found", status: 404 });
+  app.use((_request, response) => {
+    error(response, { message: "Not Found", status: 404, code: ErrorCode.NOT_FOUND });
   });
 
   return app;

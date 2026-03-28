@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import crypto from "crypto";
 import { error } from "./response.js";
+import { ErrorCode } from "./errorCodes.js";
 
 /**
  * Middleware that validates the Authorization: Bearer header against the configured API key.
@@ -24,7 +25,7 @@ export function createAuthMiddleware(apiKey: string | undefined) {
       return error(res, {
         message: "Unauthorized: Missing or invalid Authorization header",
         status: 401,
-        code: "UNAUTHORIZED",
+        code: ErrorCode.UNAUTHORIZED,
       });
     }
 
@@ -49,7 +50,7 @@ export function createAuthMiddleware(apiKey: string | undefined) {
     return error(res, {
       message: "Unauthorized: Invalid API key",
       status: 401,
-      code: "UNAUTHORIZED",
+      code: ErrorCode.UNAUTHORIZED,
     });
   };
 }

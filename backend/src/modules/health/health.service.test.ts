@@ -18,6 +18,11 @@ const mockEnv = {
   websocketUrl: "ws://localhost:8080",
   eventPollingIntervalMs: 5000,
   eventPollingEnabled: false,
+  duePaymentsJobEnabled: false,
+  duePaymentsJobIntervalMs: 60000,
+  cursorCleanupJobEnabled: false,
+  cursorCleanupJobIntervalMs: 86400000,
+  cursorRetentionDays: 30,
   corsOrigin: ["*"],
   requestBodyLimit: "1mb",
 };

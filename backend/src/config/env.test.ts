@@ -95,6 +95,35 @@ test("rejects the example contract id in production", () => {
   );
 });
 
+test("throws when SOROBAN_RPC_URL has invalid protocol", () => {
+  resetEnv({
+    SOROBAN_RPC_URL: "ftp://example.com",
+  });
+
+  assert.throws(
+    () => loadEnv(),
+    /SOROBAN_RPC_URL must use one of these protocols/i,
+  );
+});
+
+test("throws when port is out of range", () => {
+  resetEnv({ PORT: "70000" });
+
+  assert.throws(
+    () => loadEnv(),
+    /PORT must be an integer between 1 and 65535/i,
+  );
+});
+
+test("throws when STELLAR_NETWORK has unknown value", () => {
+  resetEnv({ STELLAR_NETWORK: "invalid" });
+
+  assert.throws(
+    () => loadEnv(),
+    /STELLAR_NETWORK must be one of:/i,
+  );
+});
+
 test("requires API_KEY in production", () => {
   resetEnv({
     NODE_ENV: "production",
