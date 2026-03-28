@@ -179,8 +179,27 @@ The backend is a **lightweight support layer** for VaultDAO, not a replacement f
 
 All public endpoints are rate-limited to 100 requests per minute per IP. Return code `429 Too Many Requests` when exceeded.
 
+## 🚀 Get Started
+
+See [ROADMAP.md](docs/ROADMAP.md) for contributor tasks.
+
+```
+pnpm install
+pnpm test
+# Pick Foundation task
+```
+
+## 📦 Deployment
+
+See [DEPLOYMENT.md](docs/DEPLOYMENT.md) for staging/production.
+
+```
+docker build -t vaultdao-backend .
+docker run --env-file .env.prod -p 8787:8787 vaultdao-backend
+```
+
 ## Current Endpoints
 
-- `GET /health`
-- `GET /ready`
-- `GET /api/v1/status`
+- `GET /health` (liveness)
+- `GET /ready` (readiness)
+- `GET /api/v1/status` (sync status)
