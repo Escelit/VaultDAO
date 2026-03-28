@@ -852,7 +852,7 @@ impl VaultDAO {
             storage::set_proposal(&env, &proposal);
             storage::metrics_on_expiry(&env);
             events::emit_proposal_expired(&env, proposal_id, proposal.expires_at);
-            
+
             let metrics = storage::get_metrics(&env);
             events::emit_metrics_updated(
                 &env,
@@ -1470,7 +1470,7 @@ impl VaultDAO {
 
             storage::create_audit_entry(&env, AuditAction::RejectProposal, &canceller, proposal_id);
             events::emit_proposal_rejected(&env, proposal_id, &canceller, &proposal.proposer);
-            
+
             storage::metrics_on_rejection(&env);
             let metrics = storage::get_metrics(&env);
             events::emit_metrics_updated(
@@ -2720,7 +2720,7 @@ impl VaultDAO {
                 storage::set_proposal(&env, &proposal);
                 storage::metrics_on_expiry(&env);
                 events::emit_proposal_expired(&env, proposal_id, proposal.expires_at);
-                
+
                 let metrics = storage::get_metrics(&env);
                 events::emit_metrics_updated(
                     &env,
@@ -2729,7 +2729,7 @@ impl VaultDAO {
                     metrics.expired_count,
                     metrics.success_rate_bps(),
                 );
-                
+
                 failed_count += 1;
                 continue;
             }
