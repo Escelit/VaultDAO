@@ -94,3 +94,26 @@ test("rejects the example contract id in production", () => {
     /CONTRACT_ID must be set to a deployed contract value/i,
   );
 });
+
+test("requires API_KEY in production", () => {
+  resetEnv({
+    NODE_ENV: "production",
+    CORS_ORIGIN: "https://example.com",
+    CONTRACT_ID: "CD123",
+    API_KEY: undefined,
+  });
+
+  assert.throws(
+    () => loadEnv(),
+    /API_KEY is required in production environment/i,
+  );
+});
+
+test("loads API_KEY from environment", () => {
+  resetEnv({
+    API_KEY: "my-secret-key",
+  });
+
+  const env = loadEnv();
+  assert.equal(env.apiKey, "my-secret-key");
+});

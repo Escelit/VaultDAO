@@ -7,6 +7,7 @@ import { createProposalsRouter } from "./modules/proposals/proposals.routes.js";
 import { createRecurringRouter } from "./modules/recurring/recurring.routes.js";
 import { error } from "./shared/http/response.js";
 import { createRateLimitMiddleware } from "./shared/http/rateLimit.js";
+import { createAuthMiddleware } from "./shared/http/auth.js";
 import {
   REQUEST_ID_HEADER,
   generateRequestId,
@@ -82,14 +83,19 @@ export function createApp(env: BackendEnv, runtime: BackendRuntime) {
   app.use(rateLimiter);
 
   app.use(express.json({ limit: env.requestBodyLimit }));
+
+  const authMiddleware = createAuthMiddleware(env.apiKey);
+
   app.use(createHealthRouter(env, runtime));
-  app.use(createSnapshotRouter(runtime.snapshotService));
+  app.use(authMiddleware, createSnapshotRouter(runtime.snapshotService));
   app.use(
     "/api/v1/proposals",
+    authMiddleware,
     createProposalsRouter(runtime.proposalActivityAggregator),
   );
   app.use(
     "/api/v1/recurring",
+    authMiddleware,
     createRecurringRouter(runtime.recurringIndexerService),
   );
 

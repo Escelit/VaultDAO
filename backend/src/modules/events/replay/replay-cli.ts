@@ -250,4 +250,7 @@ const isDirectExecution = process.argv[1] === currentFilePath;
 if (isDirectExecution) {
   const cliArgs = process.argv.slice(2);
   void executeReplay(cliArgs);
+if (process.env.NODE_ENV !== "test") {
+  const cliArgs = process.argv.slice(2);
+  executeReplay(cliArgs);
 }

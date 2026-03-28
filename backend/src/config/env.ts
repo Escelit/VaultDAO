@@ -9,8 +9,14 @@ export interface BackendEnv {
   readonly websocketUrl: string;
   readonly eventPollingIntervalMs: number;
   readonly eventPollingEnabled: boolean;
+  readonly duePaymentsJobEnabled: boolean;
+  readonly duePaymentsJobIntervalMs: number;
+  readonly cursorCleanupJobEnabled: boolean;
+  readonly cursorCleanupJobIntervalMs: number;
+  readonly cursorRetentionDays: number;
   readonly corsOrigin: string[];
   readonly requestBodyLimit: string;
+  readonly apiKey?: string;
 }
 
 const DEFAULT_CONTRACT_ID =
@@ -135,8 +141,14 @@ export function loadEnv(): BackendEnv {
   const websocketUrl = readString("VITE_WS_URL", "ws://localhost:8080");
   const eventPollingIntervalMs = readPort("EVENT_POLLING_INTERVAL_MS", 10000, issues);
   const eventPollingEnabled = readString("EVENT_POLLING_ENABLED", "true") === "true";
+  const duePaymentsJobEnabled = readString("DUE_PAYMENTS_JOB_ENABLED", "true") === "true";
+  const duePaymentsJobIntervalMs = readPort("DUE_PAYMENTS_JOB_INTERVAL_MS", 60000, issues);
+  const cursorCleanupJobEnabled = readString("CURSOR_CLEANUP_JOB_ENABLED", "true") === "true";
+  const cursorCleanupJobIntervalMs = readPort("CURSOR_CLEANUP_JOB_INTERVAL_MS", 86400000, issues);
+  const cursorRetentionDays = readPort("CURSOR_RETENTION_DAYS", 30, issues);
   const corsOrigin = readCommaSeparatedString("CORS_ORIGIN", nodeEnv === "production" ? [] : ["*"]);
   const requestBodyLimit = readString("REQUEST_BODY_LIMIT", "10kb");
+  const apiKey = readValue("API_KEY");
 
   validateRequiredString("HOST", host, issues);
   validateAllowedValue("NODE_ENV", nodeEnv, ALLOWED_NODE_ENVS, issues);
@@ -155,6 +167,10 @@ export function loadEnv(): BackendEnv {
     issues.push("CORS_ORIGIN is required in production environment.");
   }
 
+  if (nodeEnv === "production" && !apiKey) {
+    issues.push("API_KEY is required in production environment.");
+  }
+
   throwIfInvalid(issues);
 
   return {
@@ -168,7 +184,13 @@ export function loadEnv(): BackendEnv {
     websocketUrl,
     eventPollingIntervalMs,
     eventPollingEnabled,
+    duePaymentsJobEnabled,
+    duePaymentsJobIntervalMs,
+    cursorCleanupJobEnabled,
+    cursorCleanupJobIntervalMs,
+    cursorRetentionDays,
     corsOrigin,
     requestBodyLimit,
+    apiKey,
   };
 }

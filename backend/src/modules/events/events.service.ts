@@ -3,6 +3,7 @@ import type { ContractEvent, PollingState } from "./events.types.js";
 import type { CursorStorage } from "./cursor/index.js";
 import { EventNormalizer } from "./normalizers/index.js";
 import type { ProposalActivityConsumer } from "../proposals/consumer.js";
+import type { EventWebSocketServer } from "../websocket/websocket.server.js";
 
 /** Maximum backoff delay: 5 minutes */
 const MAX_BACKOFF_MS = 5 * 60 * 1000;
@@ -44,6 +45,7 @@ export class EventPollingService {
     private readonly env: BackendEnv,
     private readonly storage: CursorStorage,
     private readonly proposalConsumer?: ProposalActivityConsumer,
+    private readonly wsServer?: EventWebSocketServer,
   ) {}
 
   /**
@@ -168,6 +170,9 @@ export class EventPollingService {
   private async handleBatch(events: ContractEvent[]): Promise<void> {
     console.log(`[events-service] processing batch of ${events.length} events`);
     for (const event of events) {
+      if (this.wsServer) {
+        this.wsServer.broadcastEvent(event);
+      }
       await this.processEvent(event);
     }
   }
